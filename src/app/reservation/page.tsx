@@ -1,15 +1,54 @@
 "use client";
 import { useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
 
 export default function Reservation() {
   const [step, setStep] = useState(1);
   const [phone, setPhone] = useState("");
+  const [name, setName] = useState("");
+  const [partysize, setParetysize] = useState("");
+  const [datetime, setDateTime] = useState("");
 
-  const handleSubmitStep1 = (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitStep1 = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    const nameValue = formData.get("name")?.toString() || "";
     const phoneValue = formData.get("phone")?.toString() || "";
+    const sizeValue = formData.get("partysize")?.toString() || "";
+    const datetimeValue = formData.get("datetime")?.toString() || "";
+
+    setName(nameValue);
     setPhone(phoneValue);
+    setParetysize(sizeValue);
+    setDateTime(datetimeValue);
+
+    const { data: user, error: userError } = await supabase
+      .from("users")
+      .insert({
+        name: nameValue,
+        phone: phoneValue,
+        role: "customer",
+      })
+      .select()
+      .single();
+
+    if (userError) {
+      console.error("❌ ไม่สามารถเพิ่มผู้ใช้:", userError.message);
+      return alert("เกิดข้อผิดพลาดในการบันทึกผู้ใช้");
+    }
+
+    const { error: resvError } = await supabase.from("reservations").insert({
+      id: user.id,
+      names: nameValue,
+      partysize: Number(sizeValue),
+      reservation_datetime: datetimeValue,
+    });
+
+    if (resvError) {
+      console.error("❌ ไม่สามารถเพิ่มการจอง:", resvError.message);
+      return alert("เกิดข้อผิดพลาดในการจอง");
+    }
+
     setStep(2);
   };
 
@@ -26,10 +65,15 @@ export default function Reservation() {
         <div className="w-full max-w-md px-6 py-5 border-2 shadow-lg rounded-[20px] bg-white">
           {step === 1 && (
             <>
-              <h2 className="text-center text-2xl">กรุณากรอกข้อมูลเพื่อจองคิว</h2>
+              <h2 className="text-center text-2xl">
+                กรุณากรอกข้อมูลเพื่อจองคิว
+              </h2>
               <form className="space-y-4 mt-4" onSubmit={handleSubmitStep1}>
                 <div>
-                  <label htmlFor="name" className="block text-sm font-medium text-left text-gray-700">
+                  <label
+                    htmlFor="name"
+                    className="block text-sm font-medium text-left text-gray-700"
+                  >
                     ชื่อ-นามสกุล
                   </label>
                   <input
@@ -43,7 +87,10 @@ export default function Reservation() {
                 </div>
 
                 <div>
-                  <label htmlFor="phone" className="block text-sm font-medium text-left text-gray-700">
+                  <label
+                    htmlFor="phone"
+                    className="block text-sm font-medium text-left text-gray-700"
+                  >
                     เบอร์โทรศัพท์
                   </label>
                   <input
@@ -57,13 +104,16 @@ export default function Reservation() {
                 </div>
 
                 <div>
-                  <label htmlFor="people" className="block text-sm font-medium text-left text-gray-700">
+                  <label
+                    htmlFor="people"
+                    className="block text-sm font-medium text-left text-gray-700"
+                  >
                     จำนวนคน
                   </label>
                   <input
                     type="number"
-                    id="people"
-                    name="people"
+                    id="partysize"
+                    name="partysize"
                     min="1"
                     required
                     className="mt-1 block w-full px-2 h-12 rounded-[20px] border-gray-300 shadow-sm"
@@ -71,7 +121,10 @@ export default function Reservation() {
                 </div>
 
                 <div>
-                  <label htmlFor="datetime" className="block text-sm font-medium text-left text-gray-700">
+                  <label
+                    htmlFor="datetime"
+                    className="block text-sm font-medium text-left text-gray-700"
+                  >
                     วันที่และเวลา
                   </label>
                   <input
@@ -97,13 +150,15 @@ export default function Reservation() {
             <>
               <h2 className="text-center text-2xl">ยืนยันเบอร์โทรศัพท์</h2>
               <p className="mt-4 text-gray-600">
-                เบอร์ที่คุณกรอกคือ <span className="font-bold text-indigo-600">{phone}</span>
+                เบอร์ที่คุณกรอกคือ{" "}
+                <span className="font-bold text-indigo-600">{phone}</span><br/>
+                <span>หากยังไม่ได้รับ OTP <span className="font-bold text-indigo-600">กดเพื่อส่งอีกครั้ง</span></span>
               </p>
               <form className="mt-6 space-y-4" onSubmit={handleSubmitStep2}>
                 <input
                   type="tel"
                   name="confirmPhone"
-                  placeholder="กรอกเบอร์โทรอีกครั้ง"
+                  placeholder="กรอก OTP เพื่อยืนยันเบอร์โทรศัพท์"
                   required
                   className="block w-full px-2 h-12 rounded-[20px] border-gray-300 shadow-sm"
                 />
