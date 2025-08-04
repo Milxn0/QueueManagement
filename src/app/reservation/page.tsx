@@ -1,4 +1,5 @@
 "use client";
+
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -22,24 +23,38 @@ export default function Reservation() {
     setParetysize(sizeValue);
     setDateTime(datetimeValue);
 
-    const { data: user, error: userError } = await supabase
+    // ตรวจสอบว่ามี user อยู่แล้วหรือไม่
+    const { data: existingUser, error: fetchUserError } = await supabase
       .from("users")
-      .insert({
-        name: nameValue,
-        phone: phoneValue,
-        role: "customer",
-      })
-      .select()
-      .single();
+      .select("id")
+      .eq("phone", phoneValue)
+      .maybeSingle();
 
-    if (userError) {
-      console.error("❌ ไม่สามารถเพิ่มผู้ใช้:", userError.message);
-      return alert("เกิดข้อผิดพลาดในการบันทึกผู้ใช้");
+    let userId;
+    if (fetchUserError) {
+      console.error("❌ ตรวจสอบผู้ใช้ล้มเหลว:", fetchUserError.message);
+      return alert("เกิดข้อผิดพลาดในการตรวจสอบผู้ใช้");
+    }
+
+    if (existingUser) {
+      userId = existingUser.id;
+    } else {
+      const { data: newUser, error: userError } = await supabase
+        .from("users")
+        .insert({ name: nameValue, phone: phoneValue, role: "customer" })
+        .select()
+        .single();
+
+      if (userError) {
+        console.error("❌ ไม่สามารถเพิ่มผู้ใช้:", userError.message);
+        return alert("เกิดข้อผิดพลาดในการบันทึกผู้ใช้");
+      }
+
+      userId = newUser.id;
     }
 
     const { error: resvError } = await supabase.from("reservations").insert({
-      id: user.id,
-      names: nameValue,
+      user_id: userId,
       partysize: Number(sizeValue),
       reservation_datetime: datetimeValue,
     });
@@ -151,8 +166,11 @@ export default function Reservation() {
               <h2 className="text-center text-2xl">ยืนยันเบอร์โทรศัพท์</h2>
               <p className="mt-4 text-gray-600">
                 เบอร์ที่คุณกรอกคือ{" "}
-                <span className="font-bold text-indigo-600">{phone}</span><br/>
-                <span>หากยังไม่ได้รับ OTP <span className="font-bold text-indigo-600">กดเพื่อส่งอีกครั้ง</span></span>
+                <span className="font-bold text-indigo-600">{phone}</span>
+                <br />
+                <span>
+                  หากยังไม่ได้รับ OTP <span className="font-bold text-indigo-600">กดเพื่อส่งอีกครั้ง</span>
+                </span>
               </p>
               <form className="mt-6 space-y-4" onSubmit={handleSubmitStep2}>
                 <input

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 
-export default function Navbar() {
+export default function Navbar({ userRole }: { userRole: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
@@ -54,6 +54,13 @@ export default function Navbar() {
             ติดต่อเรา
           </Link>
         </li>
+        {userRole === "admin" && (
+          <li>
+            <Link href="/admin" className="hover:text-indigo-300 block">
+              Dashboard
+            </Link>
+          </li>
+        )}
       </ul>
     </nav>
   );
