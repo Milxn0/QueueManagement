@@ -1,12 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
-
-// เตรียม Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
-const supabase = createClient(supabaseUrl, supabaseAnonKey);
+import { supabase } from "@/lib/supabaseClient"; // ใช้ import จาก lib
 
 type Stat = {
     label: string;
@@ -18,11 +13,51 @@ type Stat = {
 const DashboardPage = () => {
     const [stats, setStats] = useState<Stat[]>(
         [
-            { label: "จำนวนลูกค้าวันนี้", value: 0, color: "bg-blue-100", text: "text-blue-700" },
-            { label: "คิวที่จองเข้ามา", value: 0, color: "bg-green-100", text: "text-green-700" },
-            { label: "จำนวนคิวที่ไม่มา", value: 0, color: "bg-red-100", text: "text-yellow-700" },
+            { label: "จำนวนคิววันนี้", value: 0, color: "bg-blue-100", text: "text-blue-700" },
+            { label: "จำนวนคิวเดือนนี้", value: 0, color: "bg-green-100", text: "text-green-700" },
+            { label: "จำนวนคิวปีนี้", value: 0, color: "bg-yellow-100", text: "text-yellow-700" },
         ]
     );
+
+    // ฟังก์ชันดึงข้อมูล queue
+    const fetchStats = async () => {
+        const { data, error } = await supabase.from('users').select('*');
+        if (error || !data) return;
+
+        const today = new Date().toISOString().slice(0, 10);
+        const month = today.slice(0, 7);
+        const year = today.slice(0, 4);
+
+        const todayCount = data.filter((item: any) => item.created_at?.slice(0, 10) === today).length;
+        const monthCount = data.filter((item: any) => item.created_at?.slice(0, 7) === month).length;
+        const yearCount = data.filter((item: any) => item.created_at?.slice(0, 4) === year).length;
+
+        setStats([
+            { label: "จำนวนคิววันนี้", value: todayCount, color: "bg-blue-100", text: "text-blue-700" },
+            { label: "จำนวนคิวเดือนนี้", value: monthCount, color: "bg-green-100", text: "text-green-700" },
+            { label: "จำนวนคิวปีนี้", value: yearCount, color: "bg-yellow-100", text: "text-yellow-700" },
+        ]);
+    };
+
+    useEffect(() => {
+        fetchStats();
+
+        // subscribe realtime
+        const channel = supabase
+            .channel('queue-changes')
+            .on(
+                'postgres_changes',
+                { event: '*', schema: 'public', table: 'queue' },
+                () => {
+                    fetchStats();
+                }
+            )
+            .subscribe();
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
+    }, []);
 
     return (
         <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-center justify-center">

@@ -9,6 +9,7 @@ export function createClient() {
   return createBrowserClient(supabaseUrl, supabaseAnonKey);
 }
 
+export const supabase = createClient();
 
 export function createServiceClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
