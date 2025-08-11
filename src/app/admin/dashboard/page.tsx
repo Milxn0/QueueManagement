@@ -73,7 +73,7 @@ export default function DashboardPage() {
     const noShowCount = data.filter((r: any) => r.status === "no_show").length; // <-- ปรับสถานะตามจริง
 
     setStats([
-      { label: "จำนวนคิววันนี้", value: todayCount, color: "bg-blue-100", text: "text-blue-700" },
+      { label: "คิววันนี้", value: todayCount, color: "bg-blue-100", text: "text-blue-700" },
       { label: "จำนวนคิวเดือนนี้", value: monthCount, color: "bg-green-100", text: "text-green-700" },
       { label: "จำนวนคิวที่ไม่มา", value: noShowCount, color: "bg-yellow-100", text: "text-yellow-700" },
     ]);
