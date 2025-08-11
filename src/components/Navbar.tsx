@@ -34,7 +34,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="text-indigo-500 px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center">
+    <nav className="text-indigo-500 px-6 py-4 flex flex-col sm:flex-row sm:justify-between sm:items-center font-bold">
       <div className="flex justify-between items-center w-full sm:w-auto">
         <Link href="/" className="flex items-center gap-2">
           <img src="/logo.jpg" alt="Logo" className="w-10 h-10 rounded-full" />
