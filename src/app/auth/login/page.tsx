@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
@@ -17,16 +18,54 @@ export default function LoginPage() {
     e.preventDefault();
     setErr(null);
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+
+    // 1) เข้าสู่ระบบ
+    const { data: signInData, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
     setLoading(false);
 
     if (error) {
       setErr(error.message);
       return;
     }
-    // สำเร็จ -> กลับหน้าแรก หรือจะ push ไปหน้า /reservation ก็ได้
-    router.push("/");
-    router.refresh();
+
+    try {
+      // 2) ดึง user id จาก auth
+      const userId =
+        signInData.user?.id ?? (await supabase.auth.getUser()).data.user?.id;
+      if (!userId) {
+        setErr("ไม่พบข้อมูลผู้ใช้หลังเข้าสู่ระบบ");
+        return;
+      }
+
+      // 3) ตรวจ role จาก public.users
+      const { data: profile, error: profileErr } = await supabase
+        .from("users")
+        .select("role")
+        .eq("id", userId)
+        .single();
+
+      if (profileErr) {
+        // ถ้ายังไม่มีแถวใน public.users ก็ปล่อยผ่านไปหน้าแรก
+        // (กรณีคุณมี flow สร้าง profile ที่อื่นอยู่แล้ว)
+        router.push("/");
+        router.refresh();
+        return;
+      }
+
+      // 4) route ตาม role
+      if (profile?.role === "admin") {
+        router.push("/admin/dashboard");
+      } else {
+        router.push("/");
+      }
+      router.refresh();
+    } catch (e: any) {
+      setErr(e?.message || "เกิดข้อผิดพลาดขณะตรวจสอบสิทธิ์ผู้ใช้");
+    }
   };
 
   return (
@@ -70,7 +109,10 @@ export default function LoginPage() {
       </form>
 
       <p className="text-sm text-gray-600 mt-4">
-        ยังไม่มีบัญชี? <a href="/auth/register" className="text-indigo-600 underline">สมัครสมาชิก</a>
+        ยังไม่มีบัญชี?{" "}
+        <a href="/auth/register" className="text-indigo-600 underline">
+          สมัครสมาชิก
+        </a>
       </p>
     </main>
   );
