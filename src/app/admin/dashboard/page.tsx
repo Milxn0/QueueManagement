@@ -1,6 +1,4 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-explicit-any */
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars, react-hooks/exhaustive-deps */
 "use client";
 
 import { useEffect, useState } from "react";
@@ -53,9 +51,8 @@ export default function DashboardPage() {
 
   // ดึงสถิติจากตาราง reservations
   const fetchStats = async () => {
-    // ดึงเฉพาะคอลัมน์ที่ต้องใช้ให้เบาลง
     const { data, error } = await supabase
-      .from("reservations") 
+      .from("reservations")
       .select("reservation_datetime,status");
 
     if (error || !data) return;
@@ -65,14 +62,12 @@ export default function DashboardPage() {
     const mm = String(today.getMonth() + 1).padStart(2, "0");
     const dd = String(today.getDate()).padStart(2, "0");
 
-    // const todayStr = `${dd}`;
     const todayStr = `${yyyy}-${mm}-${dd}`;
     const monthStr = `${yyyy}-${mm}`;
-    const yearStr = `${yyyy}`;
 
     const todayCount = data.filter((r: any) => r.reservation_datetime?.slice(0, 10) === todayStr).length;
     const monthCount = data.filter((r: any) => r.reservation_datetime?.slice(0, 7) === monthStr).length;
-    const noShowCount = data.filter((r: any) => r.status === "no_show").length; // <-- ปรับสถานะตามจริง
+    const noShowCount = data.filter((r: any) => r.status === "no_show").length; // ปรับตามสคีมาจริง
 
     setStats([
       { label: "จำนวนคิววันนี้", value: todayCount, color: "bg-blue-100", text: "text-blue-700" },
@@ -85,7 +80,6 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchStats();
 
-    // สมัคร realtime จากตารางเดียวกับที่ query
     const channel = supabase
       .channel("reservations-changes")
       .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, () => {
