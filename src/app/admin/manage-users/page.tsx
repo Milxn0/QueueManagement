@@ -251,8 +251,8 @@ export default function ManageUsersPage() {
 
       <div className="overflow-x-auto rounded-2xl border">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr className="text-left">
+          <thead className="bg-white">
+            <tr className="text-left ">
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Name</th>
               <th className="px-4 py-3">Email</th>
@@ -261,7 +261,7 @@ export default function ManageUsersPage() {
               <th className="px-4 py-3 w-48">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-white">
             {users.map((u) => {
               const isEditing = editingId === u.id;
               const isSelf = currentUid === u.id;
@@ -292,7 +292,7 @@ export default function ManageUsersPage() {
                   </td>
 
                   {/* Name */}
-                  <td className="px-4 py-3">
+                  <td className="px-4 py-3 text-center">
                     {!isEditing ? (
                       u.name ?? "-"
                     ) : (
