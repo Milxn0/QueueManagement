@@ -32,7 +32,7 @@ export default function RegisterPage() {
       return;
     }
 
-    // สมัครสำเร็จ -> กลับไปหน้า Login หรือจะ login อัตโนมัติก็ได้
+    // สมัครสำเร็จ -> กลับไปหน้า Login
     router.push("/auth/login");
   };
 

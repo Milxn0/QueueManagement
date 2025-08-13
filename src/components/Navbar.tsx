@@ -4,17 +4,17 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import UserMenu from "@/components/UserMenu";
-import { createPortal } from "react-dom"; // ⬅️ เพิ่ม
+import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [menuOpen, setMenuOpen] = useState(false);
   const [email, setEmail] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false); // ⬅️ เพิ่ม
+  const [mounted, setMounted] = useState(false);
   const supabase = createClient();
 
-  useEffect(() => setMounted(true), []); // ⬅️ เพิ่ม
+  useEffect(() => setMounted(true), []);
 
   useEffect(() => {
     const load = async () => {
@@ -52,7 +52,6 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        {/* Left: Logo */}
         <Link href="/" className="flex items-center gap-3">
           <img
             src="/logo.jpg"
@@ -100,7 +99,7 @@ export default function Navbar() {
           </div>
         </div>
 
-        {/* Mobile actions */}
+        {/* Mobile menu */}
         <div className="flex items-center gap-2 sm:hidden">
           {email && !menuOpen && <UserMenu />}
           <button
@@ -133,7 +132,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* === Mobile Backdrop + Drawer via Portal === */}
+      {/* Mobile */}
       {mounted &&
         menuOpen &&
         createPortal(
@@ -152,8 +151,6 @@ export default function Navbar() {
               role="dialog"
               aria-modal="true"
             >
-              {/* Header */}
-              {/* ... (เดิม) ... */}
 
               {/* Body */}
               <div className="px-2 py-3 bg-gray-50">
@@ -213,7 +210,6 @@ export default function Navbar() {
                       ข้อมูลส่วนตัว
                     </Link>
 
-                    {/* ปุ่มออกจากระบบใน Drawer มือถือ */}
                     <button
                       onClick={async () => {
                         await supabase.auth.signOut();

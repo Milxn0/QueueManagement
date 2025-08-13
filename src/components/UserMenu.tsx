@@ -23,7 +23,7 @@ export default function UserMenu() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
 
-  // ตำแหน่ง dropdown (desktop)
+  // ตำแหน่ง dropdown
   const [pos, setPos] = useState<{ top: number; right: number }>({ top: 0, right: 0 });
 
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -76,13 +76,13 @@ export default function UserMenu() {
     };
   }, [supabase]);
 
-  // คำนวณตำแหน่ง dropdown ให้ชิดปุ่ม (ห่าง 4px)
+  // คำนวณตำแหน่ง dropdown
   const computePosition = () => {
     const btn = buttonRef.current;
     if (!btn) return;
     const rect = btn.getBoundingClientRect();
     const gap = 4;
-    // ค่า right คือระยะจากขอบขวาของ viewport -> ให้เมนูชิดปุ่มจึงต้องลบ gap
+
     const right = Math.max(window.innerWidth - rect.right - gap, 8);
     setPos({
       top: rect.bottom + window.scrollY + gap,
@@ -90,7 +90,7 @@ export default function UserMenu() {
     });
   };
 
-  // อัปเดตตำแหน่งเมื่อเปิด/เลื่อน/ย่อขยายหน้าจอ
+  // อัปเดตตำแหน่ง
   useEffect(() => {
     if (!open) return;
     computePosition();
@@ -197,7 +197,7 @@ export default function UserMenu() {
       {/* Desktop dropdown */}
       {mounted && open && createPortal(
         <div className="hidden sm:block">
-          {/* backdrop ใช้ปิดเมนู */}
+          {/* backdrop*/}
           <div className="fixed inset-0 z-[80]" onClick={() => setOpen(false)} />
           <div
             ref={menuRef}
@@ -212,7 +212,7 @@ export default function UserMenu() {
         document.body
       )}
 
-      {/* Mobile bottom sheet */}
+      {/* Mobile bottom*/}
       {mounted && open && createPortal(
         <div className="sm:hidden">
           <div className="fixed inset-0 bg-black/30 z-[80]" onClick={() => setOpen(false)} />

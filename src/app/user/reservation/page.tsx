@@ -20,13 +20,13 @@ export default function ReservationPage() {
   // form data (step 1)
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState(""); // เผื่ออยากเก็บไว้ติดต่อ
+  const [email, setEmail] = useState("");
   const [partySize, setPartySize] = useState<number>(1);
   const [dateTime, setDateTime] = useState<string>("");
 
   // otp (step 2)
   const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState<string | null>(null); // โชว์เฉพาะโหมดเดโม
+  const [otpSent, setOtpSent] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export default function ReservationPage() {
       const user = data.user;
       setIsLoggedIn(!!user);
 
-      // เติมอีเมลจาก auth.users ถ้ามี
+      // เติมอีเมลจาก auth.users
       if (user?.email) {
         setEmail(user.email);
       }
@@ -84,11 +84,11 @@ export default function ReservationPage() {
     };
   }, [supabase]);
 
-  // ---------- helpers ----------
+  // ---------- OTP GEN ----------
   const genOTP = () => Math.floor(100000 + Math.random() * 900000).toString();
 
+  // ---------- QueueCode GEN ----------
   const genQueueCode = () => {
-    // โค้ดสั้น อ่านง่าย และมีโอกาสซ้ำต่ำ (ยังมี unique ตรวจซ้ำอีกชั้น)
     const base = Date.now().toString(36).toUpperCase().slice(-6);
     const rand = Math.floor(Math.random() * 36 ** 2)
       .toString(36)
@@ -110,13 +110,13 @@ export default function ReservationPage() {
     setBusy(true);
     try {
       const code = genOTP();
-      // บันทึกลงตาราง public.otp_verifications
+      // บันทึกลงตาราง otp_verifications
       const { error } = await supabase.from("otp_verifications").insert({
         phone,
         otp_code: code,
       });
       if (error) throw error;
-      setOtpSent(code); // (เดโม) โปรดซ่อน/ลบเมื่อเชื่อม SMS จริง
+      setOtpSent(code);
       setMsg("ส่งรหัส OTP แล้ว กรุณาตรวจสอบและใส่รหัสยืนยัน");
       setStep(2);
     } catch (e: any) {
@@ -126,10 +126,8 @@ export default function ReservationPage() {
     }
   };
 
-  // สร้าง/ยืนยันแถวผู้ใช้ใน public.users ให้ FK และ RLS ผ่าน
   const ensureProfile = async (authUser: { id: string } | null) => {
     if (!authUser?.id) throw new Error("ไม่พบผู้ใช้ที่ล็อกอิน");
-    // มี policy: insert anon allowed, select anyone allowed → ใช้ได้
     const { data, error } = await supabase
       .from("users")
       .select("id")
@@ -139,7 +137,7 @@ export default function ReservationPage() {
 
     if (!data || data.length === 0) {
       const { error: insErr } = await supabase.from("users").insert({
-        id: authUser.id, // ให้ user_id ใน reservations ผูก FK ได้
+        id: authUser.id,
         name: fullName || null,
         phone: phone || null,
         role: "customer",
@@ -147,7 +145,7 @@ export default function ReservationPage() {
       });
       if (insErr) throw insErr;
     } else {
-      // จะอัปเดต โทร/ชื่อ/อีเมล ล่าสุดให้ก็ได้ (ขอเบาๆ ไม่บังคับ)
+      
       await supabase
         .from("users")
         .update({
@@ -168,10 +166,10 @@ export default function ReservationPage() {
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
       const queue_code = genQueueCode();
       const { error } = await supabase.from("reservations").insert({
-        user_id: userId, // RLS: auth.uid() ต้องเท่ากับ user_id
+        user_id: userId,
         reservation_datetime,
         partysize: partySize,
-        queue_code, // มี unique constraint → ถ้าชน ให้สุ่มใหม่แล้วลองอีก
+        queue_code,
         status: "pending",
       });
 
@@ -179,14 +177,13 @@ export default function ReservationPage() {
         return queue_code;
       }
 
-      // ถ้า unique ชน ให้ลองใหม่
       const msg = (error as any)?.message || "";
       const isUnique =
         msg.includes("duplicate key value violates unique constraint") ||
         msg.includes("reservations_queue_code_key");
-      if (!isUnique) throw error; // ไม่ใช่เรื่องซ้ำ โยน error เลย
+      if (!isUnique) throw error;
 
-      if (attempt === MAX_RETRY) throw error; // พยายามเต็มที่แล้ว
+      if (attempt === MAX_RETRY) throw error;
     }
 
     throw new Error("ไม่สามารถบันทึกการจองได้ (queue_code ซ้ำหลายครั้ง)");
@@ -199,7 +196,8 @@ export default function ReservationPage() {
 
     setBusy(true);
     try {
-      // ตรวจ OTP ล่าสุด
+
+      // ตรวจ OTP
       const { data, error } = await supabase
         .from("otp_verifications")
         .select("*")
@@ -218,22 +216,18 @@ export default function ReservationPage() {
         return;
       }
 
-      // ดึง auth user
+      // ดึงข้อมูล user
       const { data: u } = await supabase.auth.getUser();
       const authUser = u.user;
       if (!authUser) throw new Error("กรุณาเข้าสู่ระบบอีกครั้ง");
 
-      // ให้แน่ใจว่ามีแถว public.users ตรงกับ auth.uid()
       const publicUserId = await ensureProfile({ id: authUser.id });
 
-      // แทรกการจอง + จัดการ queue_code ซ้ำ
       const code = await insertReservationWithRetries(publicUserId);
 
       setMsg(
         `ยืนยัน OTP สำเร็จ และบันทึกการจองเรียบร้อย! รหัสคิวของคุณคือ ${code}`
       );
-      // จะ redirect ก็ได้ เช่น:
-      // router.push("/reservation/success?code="+code)
     } catch (e: any) {
       setErr(e?.message || "ไม่สามารถยืนยันรหัส OTP/บันทึกการจองได้");
     } finally {

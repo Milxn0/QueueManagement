@@ -50,7 +50,6 @@ export default function LoginPage() {
 
       if (profileErr) {
         // ถ้ายังไม่มีแถวใน public.users ก็ปล่อยผ่านไปหน้าแรก
-        // (กรณีคุณมี flow สร้าง profile ที่อื่นอยู่แล้ว)
         router.push("/");
         router.refresh();
         return;
