@@ -90,7 +90,7 @@ export default function ManageUsersPage() {
 
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, session: { user: { id: any; }; }) => {
       setIsLoggedIn(!!session?.user);
       setCurrentUid(session?.user?.id ?? null);
     });
@@ -116,7 +116,7 @@ export default function ManageUsersPage() {
 
     // admin ไว้บนสุด
     const weight = (u: AppUser) => (u.role === "admin" ? 0 : 1);
-    const sorted = (data ?? []).slice().sort((a, b) => weight(a) - weight(b));
+    const sorted = (data ?? []).slice().sort((a: AppUser, b: AppUser) => weight(a) - weight(b));
 
     setUsers(sorted);
     setLoading(false);
@@ -236,7 +236,7 @@ export default function ManageUsersPage() {
 
   return (
     <main className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6">Manage Users</h1>
+      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Manage Users</h1>
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -251,7 +251,7 @@ export default function ManageUsersPage() {
 
       <div className="overflow-x-auto rounded-2xl border">
         <table className="min-w-full text-sm">
-          <thead className="bg-white">
+          <thead className="bg-white text-indigo-600">
             <tr className="text-left ">
               <th className="px-4 py-3">Role</th>
               <th className="px-4 py-3">Name</th>

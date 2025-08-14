@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
+import { SetStateAction, useEffect, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 
@@ -49,7 +49,7 @@ export default function ReservationPage() {
 
     loadUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, session: { user: { email: SetStateAction<string>; }; }) => {
       setIsLoggedIn(!!session?.user);
       if (session?.user?.email) {
         setEmail(session.user.email);
@@ -74,7 +74,7 @@ export default function ReservationPage() {
 
     loadUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, session: { user: any; }) => {
       setIsLoggedIn(!!session?.user);
     });
 
@@ -400,9 +400,9 @@ export default function ReservationPage() {
 
           {otpSent && (
             <p className="text-xs text-gray-500">
-              (โหมดเดโม) รหัส OTP คือ{" "}
+              รหัส OTP คือ{" "}
               <span className="font-mono font-semibold">{otpSent}</span> —
-              โปรดซ่อน/ลบการแสดงผลนี้เมื่อเชื่อม SMS จริง
+              DEMO!!!!!
             </p>
           )}
         </section>

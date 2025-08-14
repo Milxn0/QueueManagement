@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState } from "react";
@@ -14,71 +15,79 @@ export default function RegisterPage() {
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const onSubmit = async (e: React.FormEvent) => {
+  async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (loading) return;
     setErr(null);
-
     if (password !== confirm) {
       setErr("รหัสผ่านไม่ตรงกัน");
       return;
     }
-
     setLoading(true);
-    const { error } = await supabase.auth.signUp({ email, password });
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
 
-    if (error) {
-      setErr(error.message);
+      // upsert แถวใน public.users (ถ้าทำได้)
+      const { data: u } = await supabase.auth.getUser();
+      if (u?.user?.id) {
+        await supabase.from("users").upsert({
+          id: u.user.id,
+          email,
+          role: "user",
+        });
+      }
+
+      router.replace("/");
       return;
+    } catch (e: any) {
+      setErr(e?.message ?? "สมัครสมาชิกไม่สำเร็จ");
+      setLoading(false);
     }
-
-    // สมัครสำเร็จ -> กลับไปหน้า Login
-    router.push("/auth/login");
-  };
+  }
 
   return (
-    <main className="max-w-md mx-auto px-6 py-10">
+    <main className="mx-auto max-w-md px-4 py-10">
       <h1 className="text-2xl font-semibold mb-6">สมัครสมาชิก</h1>
-
+      {err && (
+        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 text-red-700 px-3 py-2 text-sm">
+          {err}
+        </div>
+      )}
       <form onSubmit={onSubmit} className="space-y-4">
         <div>
           <label className="block text-sm mb-1">อีเมล</label>
           <input
             type="email"
-            required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+            required
+            className="w-full rounded-xl border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-200"
             placeholder="you@example.com"
           />
         </div>
-
         <div>
           <label className="block text-sm mb-1">รหัสผ่าน</label>
           <input
             type="password"
-            required
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
-            placeholder="อย่างน้อย 6 ตัวอักษร"
+            required
+            className="w-full rounded-xl border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-200"
+            placeholder="••••••••"
           />
         </div>
-
         <div>
           <label className="block text-sm mb-1">ยืนยันรหัสผ่าน</label>
           <input
             type="password"
-            required
             value={confirm}
             onChange={(e) => setConfirm(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
-            placeholder="พิมพ์รหัสผ่านอีกครั้ง"
+            required
+            className="w-full rounded-xl border bg-white px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-200"
+            placeholder="••••••••"
           />
         </div>
-
-        {err && <p className="text-red-600 text-sm">{err}</p>}
-
         <button
           type="submit"
           disabled={loading}

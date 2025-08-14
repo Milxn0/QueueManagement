@@ -133,7 +133,7 @@ export default function ManageQueuePage() {
 
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, s: { user: any; }) => {
       setIsLoggedIn(!!s?.user);
     });
 
@@ -292,7 +292,7 @@ export default function ManageQueuePage() {
 
   return (
     <main className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6">Manage Queue</h1>
+      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Manage Queue</h1>
 
       {error && (
         <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
@@ -334,10 +334,10 @@ export default function ManageQueuePage() {
         </button>
       </div>
 
-      <div className="overflow-x-auto rounded-2xl border">
+      <div className="overflow-x-auto rounded-2xl border shadow-md">
         <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr className="text-left">
+          <thead className="bg-white">
+            <tr className="text-left text-indigo-600">
               <th className="px-4 py-3">เวลา</th>
               <th className="px-4 py-3">รหัสคิว</th>
               <th className="px-4 py-3">ชื่อ</th>
@@ -347,7 +347,7 @@ export default function ManageQueuePage() {
               <th className="px-4 py-3 w-[220px]">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="bg-white">
             {filtered.map((r) => {
               const menuOpen = openMenuId === r.id;
               return (

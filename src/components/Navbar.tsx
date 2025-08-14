@@ -1,247 +1,169 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { createClient } from "@/lib/supabaseClient";
-import UserMenu from "@/components/UserMenu";
+import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
-import { usePathname } from "next/navigation";
+import { useAuth } from "@/hooks/useAuth";
+import UserMenu from "@/components/UserMenu";
 
 export default function Navbar() {
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
-  const [mounted, setMounted] = useState(false);
-  const supabase = createClient();
+  const router = useRouter();
+  const { user } = useAuth();
 
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  useEffect(() => {
-    const load = async () => {
-      const { data } = await supabase.auth.getUser();
-      setEmail(data.user?.email ?? null);
-    };
-    load();
+  const email = user?.email ?? null;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setEmail(session?.user?.email ?? null);
-    });
-    return () => {
-      sub.subscription.unsubscribe();
-    };
-  }, [supabase]);
-
-  useEffect(() => {
-    const onResize = () => {
-      if (window.innerWidth >= 640) setMenuOpen(false);
-    };
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  useEffect(() => {
-    document.body.style.overflow = menuOpen ? "hidden" : "";
-    return () => {
-      document.body.style.overflow = "";
-    };
-  }, [menuOpen]);
-
-  const toggleMenu = () => setMenuOpen((v) => !v);
-  const closeMenu = () => setMenuOpen(false);
+  const NavLink = ({
+    href,
+    label,
+    active,
+    onClick,
+  }: {
+    href: string;
+    label: string;
+    active: boolean;
+    onClick?: () => void;
+  }) => (
+    <Link
+      href={href}
+      onClick={onClick}
+      className={`px-3 py-2 rounded-lg text-[15px] ${
+        active
+          ? "font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100"
+          : "font-medium hover:bg-gray-50"
+      }`}
+    >
+      {label}
+    </Link>
+  );
 
   return (
-    <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-        <Link href="/" className="flex items-center gap-3">
-          <img
-            src="/logo.jpg"
-            alt="Logo"
-            className="w-10 h-10 rounded-full ring-1 ring-gray-200"
-          />
-          <span className="font-bold text-lg text-indigo-600 hidden sm:inline">
-            Seoul BBQ
-          </span>
-        </Link>
-
-        {/* Desktop menu */}
-        <div className="hidden sm:flex sm:items-center sm:gap-6 text-indigo-500 font-bold">
-          <Link href="/" className="hover:text-indigo-300">
-            หน้าแรก
-          </Link>
-          <Link href="/user/reservation" className="hover:text-indigo-300">
-            จองคิว
-          </Link>
-          <Link href="/user/contact" className="hover:text-indigo-300">
-            ติดต่อเรา
+    <nav className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur border-b border-gray-100">
+      {/* ⬇️ เปลี่ยนเฉพาะบรรทัดนี้ให้ยืดเต็มหน้าจอ */}
+      <div className="w-full px-3 sm:px-4 md:px-6 lg:px-10 xl:px-12 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-6">
+          <Link href="/" className="flex items-center gap-2">
+            <img src="/logo.jpg" alt="logo" className="h-7 w-7" />
+            <span className="font-semibold">Seoul BBQ</span>
           </Link>
 
-          <div className="sm:ml-2">
-            {email ? (
-              <div className="flex items-center gap-3">
-                <UserMenu />
-              </div>
-            ) : (
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/auth/login"
-                  className="rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm hover:bg-indigo-700"
-                >
-                  เข้าสู่ระบบ
-                </Link>
-                <Link
-                  href="/auth/register"
-                  className="rounded-lg border border-indigo-300 px-3 py-1.5 text-sm hover:bg-indigo-50"
-                >
-                  สมัครสมาชิก
-                </Link>
-              </div>
-            )}
+          <div className="hidden md:flex items-center gap-1">
+            <NavLink href="/" label="หน้าแรก" active={pathname === "/"} />
+            <NavLink
+              href="/user/reservation"
+              label="จองคิว"
+              active={pathname.startsWith("/user/reservation")}
+            />
+            <NavLink
+              href="/user/contact"
+              label="ติดต่อเรา"
+              active={pathname.startsWith("/user/contact")}
+            />
           </div>
         </div>
 
-        {/* Mobile menu */}
-        <div className="flex items-center gap-2 sm:hidden">
-          {email && !menuOpen && <UserMenu />}
+        <div className="hidden md:flex items-center gap-3">
+          {email ? (
+            <UserMenu />
+          ) : (
+            <div className="flex items-center gap-2">
+              <Link
+                href="/auth/login"
+                className="rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50 active:scale-[.98]"
+              >
+                เข้าสู่ระบบ
+              </Link>
+              <Link
+                href="/auth/register"
+                className="rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700 active:scale-[.98]"
+              >
+                สมัครสมาชิก
+              </Link>
+            </div>
+          )}
+        </div>
+
+        {/* Mobile */}
+        <div className="md:hidden flex items-center gap-2">
+          {email ? (
+            <UserMenu />
+          ) : (
+            <Link
+              href="/auth/login"
+              className="rounded-lg bg-indigo-600 text-white px-3 py-2 text-sm font-medium hover:bg-indigo-700 active:scale-[.98]"
+            >
+              เข้าสู่ระบบ
+            </Link>
+          )}
           <button
-            onClick={toggleMenu}
             aria-label="เปิดเมนู"
-            aria-expanded={menuOpen}
-            aria-controls="mobile-drawer"
-            className="inline-flex items-center justify-center w-10 h-10 rounded-lg border border-indigo-200 text-indigo-600 active:scale-95"
+            className="rounded-lg border px-3 py-2 active:scale-[.98]"
+            onClick={() => setMenuOpen(true)}
           >
-            {!menuOpen ? (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M4 7h16M4 12h16M4 17h16"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-                <path
-                  d="M6 6l12 12M6 18L18 6"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-            )}
+            เมนู
           </button>
         </div>
       </div>
 
-      {/* Mobile */}
+      {/* Drawer: mount Portal ONLY when open */}
       {mounted &&
         menuOpen &&
         createPortal(
-          <>
-            {/* Backdrop */}
+          <aside className="fixed inset-0 z-40">
             <div
-              className="sm:hidden fixed inset-0 bg-black/70 z-[100] transition-opacity duration-200 opacity-100"
-              onClick={closeMenu}
+              className="absolute inset-0 bg-black/30"
+              onClick={() => setMenuOpen(false)}
             />
-
-            {/* Drawer */}
-            <aside
-              id="mobile-drawer"
-              className="sm:hidden fixed inset-y-0 left-0 w-[80%] max-w-xs bg-white border-r shadow-xl
-                 transition-transform duration-200 translate-x-0 z-[110]"
-              role="dialog"
-              aria-modal="true"
-            >
-
-              {/* Body */}
-              <div className="px-2 py-3 bg-gray-50">
-                <nav className="space-y-1">
-                  <Link
-                    href="/"
-                    onClick={closeMenu}
-                    className={`block px-3 py-3 rounded-lg text-[15px] ${
-                      pathname === "/"
-                        ? "font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100"
-                        : "font-medium hover:bg-gray-50"
-                    }`}
-                  >
-                    หน้าแรก
-                  </Link>
-                  <Link
-                    href="/user/reservation"
-                    onClick={closeMenu}
-                    className={`block px-3 py-3 rounded-lg text-[15px] ${
-                      pathname.startsWith("/user/reservation")
-                        ? "font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100"
-                        : "font-medium hover:bg-gray-50"
-                    }`}
-                  >
-                    จองคิว
-                  </Link>
-                  <Link
-                    href="/user/contact"
-                    onClick={closeMenu}
-                    className={`block px-3 py-3 rounded-lg text-[15px] ${
-                      pathname.startsWith("/user/contact")
-                        ? "font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100"
-                        : "font-medium hover:bg-gray-50"
-                    }`}
-                  >
-                    ติดต่อเรา
-                  </Link>
-                </nav>
-
-                <div className="my-4 h-px bg-gray-100" />
-
-                {email ? (
-                  <div className="space-y-2">
-                    <p className="px-3 text-xs text-gray-500">บัญชีของฉัน</p>
-                    <Link
-                      href="/reservations/history"
-                      onClick={closeMenu}
-                      className="block px-3 py-3 rounded-lg text-[15px] hover:bg-gray-50"
-                    >
-                      ประวัติการจอง
-                    </Link>
-                    <Link
-                      href="/profile"
-                      onClick={closeMenu}
-                      className="block px-3 py-3 rounded-lg text-[15px] hover:bg-gray-50"
-                    >
-                      ข้อมูลส่วนตัว
-                    </Link>
-
-                    <button
-                      onClick={async () => {
-                        await supabase.auth.signOut();
-                        closeMenu();
-                        window.location.href = "/auth/login";
-                      }}
-                      className="mt-2 block w-full text-left px-3 py-3 rounded-lg text-[15px] text-red-600 hover:bg-red-50"
-                    >
-                      ออกจากระบบ
-                    </button>
-                  </div>
-                ) : (
-                  <div className="mt-2 grid grid-cols-2 gap-2 px-2">
-                    <Link
-                      href="/auth/login"
-                      onClick={closeMenu}
-                      className="text-center rounded-lg bg-indigo-600 text-white py-2.5 text-sm font-medium active:scale-[.98]"
-                    >
-                      เข้าสู่ระบบ
-                    </Link>
-                    <Link
-                      href="/auth/register"
-                      onClick={closeMenu}
-                      className="text-center rounded-lg border border-indigo-200 py-2.5 text-sm font-medium hover:bg-indigo-50 active:scale-[.98]"
-                    >
-                      สมัครสมาชิก
-                    </Link>
-                  </div>
-                )}
+            <div className="absolute left-0 top-0 h-full w-80 bg-white shadow-xl p-4 flex flex-col gap-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <img src="/logo.jpg" alt="logo" className="h-7 w-7" />
+                  <span className="font-semibold">Seoul BBQ</span>
+                </div>
+                <button
+                  onClick={() => setMenuOpen(false)}
+                  className="rounded-lg border p-1"
+                  aria-label="ปิดเมนู"
+                >
+                  ✕
+                </button>
               </div>
-            </aside>
-          </>,
+              <div className="h-px bg-gray-100" />
+              <NavLink
+                href="/"
+                label="หน้าแรก"
+                active={pathname === "/"}
+                onClick={() => setMenuOpen(false)}
+              />
+              <NavLink
+                href="/user/reservation"
+                label="จองคิว"
+                active={pathname.startsWith("/user/reservation")}
+                onClick={() => setMenuOpen(false)}
+              />
+              <NavLink
+                href="/user/contact"
+                label="ติดต่อเรา"
+                active={pathname.startsWith("/user/contact")}
+                onClick={() => setMenuOpen(false)}
+              />
+              {!email && (
+                <Link
+                  href="/auth/register"
+                  className="mt-2 text-center rounded-lg border px-3 py-2 text-sm font-medium hover:bg-gray-50"
+                  onClick={() => setMenuOpen(false)}
+                >
+                  สมัครสมาชิก
+                </Link>
+              )}
+            </div>
+          </aside>,
           document.body
         )}
     </nav>

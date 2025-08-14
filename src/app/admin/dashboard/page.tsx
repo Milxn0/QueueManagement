@@ -1,3 +1,4 @@
+/* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -6,62 +7,185 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 
 type Stat = { label: string; value: number; color: string; text: string };
-type DashboardCounts = { today: number; month: number; cancelled_today: number };
+
+type FilterKey = "all" | "today" | "month" | "year" | "cancelled" | "blacklist";
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "คิวทั้งหมด" },
+  { key: "today", label: "คิววันนี้" },
+  { key: "month", label: "คิวเดือนนี้" },
+  { key: "year", label: "คิวปีนี้" },
+  { key: "cancelled", label: "คิวที่ยกเลิก" },
+  { key: "blacklist", label: "คิวที่ติด Blacklist" },
+];
+
+type ReservationRow = {
+  id: string;
+  user_id: string | null;
+  reservation_datetime: string | null; // timestamptz
+  partysize: number | string | null;
+  queue_code: string | null;
+  status: string | null;
+  created_at: string | null;
+  table_id: string | null;
+};
 
 export default function DashboardPage() {
-  // สร้าง client ครั้งเดียว
   const supabase = useMemo(() => createClient(), []);
 
-  // auth gate
+  // ---------- Auth gate ----------
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!mounted) return;
+      setIsLoggedIn(!!data.user);
+      setLoading(false);
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, s: { user: any; }) => setIsLoggedIn(!!s?.user));
+    return () => sub.subscription.unsubscribe();
+  }, [supabase]);
 
-  // stats cards
+  // ---------- Stats (นับจากตาราง reservations โดยตรง) ----------
   const [stats, setStats] = useState<Stat[]>([
     { label: "จำนวนคิววันนี้", value: 0, color: "bg-blue-100", text: "text-blue-700" },
     { label: "จำนวนคิวเดือนนี้", value: 0, color: "bg-green-100", text: "text-green-700" },
     { label: "คิวไม่มาวันนี้ (cancelled)", value: 0, color: "bg-yellow-100", text: "text-yellow-700" },
   ]);
 
-  // โหลดสถานะผู้ใช้
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!mounted) return;
-      setIsLoggedIn(!!data.user);
-      setLoading(false);
-    };
-    load();
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setIsLoggedIn(!!s?.user));
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
-  }, [supabase]);
+  const startEnd = useCallback(() => {
+    // ใช้โซนเวลาบนเครื่องผู้ใช้ (ตรงกับภาพและ scenario ไทย)
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
 
-  // ดึงสถิติผ่าน RPC (รวดเดียว)
+    const startOfDay = new Date(y, m, now.getDate(), 0, 0, 0, 0);
+    const endOfDay = new Date(y, m, now.getDate(), 23, 59, 59, 999);
+    const startOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
+    const startOfYear = new Date(y, 0, 1, 0, 0, 0, 0);
+
+    const iso = (d: Date) => d.toISOString();
+    return {
+      startOfDayISO: iso(startOfDay),
+      endOfDayISO: iso(endOfDay),
+      startOfMonthISO: iso(startOfMonth),
+      startOfYearISO: iso(startOfYear),
+    };
+  }, []);
+
   const fetchStats = useCallback(async () => {
-    const { data, error } = await supabase.rpc("dashboard_counts_tz", { tz: "Asia/Bangkok" });
-    if (error || !data || !data[0]) return;
+    const { startOfDayISO, endOfDayISO, startOfMonthISO } = startEnd();
 
-    const { today, month, cancelled_today } = data[0] as DashboardCounts;
+    // 1) today
+    const todayQ = supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .gte("reservation_datetime", startOfDayISO)
+      .lte("reservation_datetime", endOfDayISO);
+
+    // 2) month
+    const monthQ = supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .gte("reservation_datetime", startOfMonthISO);
+
+    // 3) cancelled today
+    const cancelledTodayQ = supabase
+      .from("reservations")
+      .select("id", { count: "exact", head: true })
+      .gte("reservation_datetime", startOfDayISO)
+      .lte("reservation_datetime", endOfDayISO)
+      .ilike("status", "%cancel%");
+
+    const [t, m, c] = await Promise.all([todayQ, monthQ, cancelledTodayQ]);
+
     setStats([
-      { label: "จำนวนคิววันนี้", value: today, color: "bg-blue-100", text: "text-blue-700" },
-      { label: "จำนวนคิวเดือนนี้", value: month, color: "bg-green-100", text: "text-green-700" },
-      { label: "คิวไม่มาวันนี้ (cancelled)", value: cancelled_today, color: "bg-yellow-100", text: "text-yellow-700" },
+      { label: "จำนวนคิววันนี้", value: t.count ?? 0, color: "bg-blue-100", text: "text-blue-700" },
+      { label: "จำนวนคิวเดือนนี้", value: m.count ?? 0, color: "bg-green-100", text: "text-green-700" },
+      { label: "คิวไม่มาวันนี้ (cancelled)", value: c.count ?? 0, color: "bg-yellow-100", text: "text-yellow-700" },
     ]);
+  }, [startEnd, supabase]);
+
+  // ---------- Blacklist ----------
+  const [blacklistUserIds, setBlacklistUserIds] = useState<Set<string>>(new Set());
+  const fetchBlacklist = useCallback(async () => {
+    try {
+      const { data } = await supabase.from("blacklist").select("user_id, active");
+      const ids = new Set<string>();
+      (data ?? []).forEach((r: any) => {
+        if (r?.user_id && (r?.active ?? true)) ids.add(r.user_id as string);
+      });
+      setBlacklistUserIds(ids);
+    } catch {
+      setBlacklistUserIds(new Set());
+    }
   }, [supabase]);
 
-  // realtime: ยิง refetch เมื่อมี INSERT/UPDATE/DELETE ที่ reservations
+  // ---------- Reservations table (ดึงจาก DB + กรองที่ DB) ----------
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [rows, setRows] = useState<ReservationRow[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(true);
+
+  const fetchReservations = useCallback(async () => {
+    setRowsLoading(true);
+    const { startOfDayISO, endOfDayISO, startOfMonthISO, startOfYearISO } = startEnd();
+
+    let q = supabase
+      .from("reservations")
+      .select(
+        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id"
+      )
+      .order("reservation_datetime", { ascending: false })
+      .limit(200);
+
+    switch (filter) {
+      case "today":
+        q = q.gte("reservation_datetime", startOfDayISO).lte("reservation_datetime", endOfDayISO);
+        break;
+      case "month":
+        q = q.gte("reservation_datetime", startOfMonthISO);
+        break;
+      case "year":
+        q = q.gte("reservation_datetime", startOfYearISO);
+        break;
+      case "cancelled":
+        q = q.ilike("status", "%cancel%");
+        break;
+      case "blacklist":
+        if (blacklistUserIds.size === 0) {
+          setRows([]);
+          setRowsLoading(false);
+          return;
+        }
+        q = q.in("user_id", Array.from(blacklistUserIds));
+        break;
+      case "all":
+      default:
+        // no extra filter
+        break;
+    }
+
+    const { data, error } = await q;
+    setRows(error ? [] : (data as ReservationRow[]));
+    setRowsLoading(false);
+  }, [filter, startEnd, supabase, blacklistUserIds]);
+
+  // ---------- Realtime ----------
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
-    refetchTimer.current = setTimeout(fetchStats, 250);
-  }, [fetchStats]);
+    refetchTimer.current = setTimeout(() => {
+      fetchStats();
+      fetchReservations();
+      fetchBlacklist();
+    }, 250);
+  }, [fetchStats, fetchReservations, fetchBlacklist]);
 
   useEffect(() => {
     fetchStats();
+    fetchBlacklist();
+    fetchReservations();
     const ch = supabase
       .channel("reservations-dashboard")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "reservations" }, scheduleRefetch)
@@ -72,7 +196,23 @@ export default function DashboardPage() {
       if (refetchTimer.current) clearTimeout(refetchTimer.current);
       supabase.removeChannel(ch);
     };
-  }, [supabase, fetchStats, scheduleRefetch]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // เมื่อเปลี่ยนตัวกรอง → ดึงใหม่จาก DB
+  useEffect(() => {
+    fetchReservations();
+  }, [filter, fetchReservations]);
+
+  // ---------- helpers ----------
+  const formatDate = (value: string | null) => {
+    if (!value) return "-";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime())
+      ? "-"
+      : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  };
+  const isCancelled = (s: string | null) => (s ?? "").toLowerCase().includes("cancel");
 
   // ---------- UI ----------
   if (loading) {
@@ -108,18 +248,115 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-center justify-center">
-      <main className="max-w-4xl w-full px-6 py-10 bg-white shadow-xl rounded-2xl">
-        <h1 className="text-2xl font-semibold mb-6">Dashboard</h1>
+    <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-start justify-center">
+      <main className="max-w-6xl w-full">
+        {/* สรุปสถิติ */}
+        <section className="mb-8">
+          <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Dashboard</h1>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
+            {stats.map((stat, idx) => (
+              <div key={idx} className={`rounded-2xl shadow-lg p-8 flex flex-col items-center ${stat.color}`}>
+                <div className={`text-4xl font-bold mb-2 ${stat.text}`}>{stat.value}</div>
+                <div className="text-lg font-medium text-gray-700">{stat.label}</div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-          {stats.map((stat, idx) => (
-            <div key={idx} className={`rounded-2xl shadow-lg p-8 flex flex-col items-center ${stat.color}`}>
-              <div className={`text-4xl font-bold mb-2 ${stat.text}`}>{stat.value}</div>
-              <div className="text-lg font-medium text-gray-700">{stat.label}</div>
-            </div>
-          ))}
-        </div>
+        {/* ตารางคิว + ตัวกรอง */}
+        <section className="bg-white rounded-2xl shadow-xl border">
+          {/* Filter bar */}
+          <div className="p-4 flex flex-wrap items-center gap-2 border-b">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => setFilter(f.key)}
+                className={`rounded-xl px-3 py-1.5 text-sm border transition ${
+                  filter === f.key
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white hover:bg-gray-50 border-gray-200 text-gray-700"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+            <div className="ml-auto text-sm text-gray-500">แสดง {rows.length} รายการ (ล่าสุด 200 แถว)</div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left bg-gray-50 border-b">
+                  <th className="px-4 py-3 font-semibold text-gray-700">คิว/โค้ด</th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">วันที่-เวลา</th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">จำนวนที่นั่ง</th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">สถานะ</th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">ผู้จอง</th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">หมายเหตุ</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsLoading ? (
+                  [...Array(6)].map((_, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="px-4 py-3"><div className="h-4 w-24 bg-gray-200 animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-40 bg-gray-200 animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-16 bg-gray-200 animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-5 w-20 bg-gray-200 animate-pulse rounded-full" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-36 bg-gray-200 animate-pulse rounded" /></td>
+                      <td className="px-4 py-3"><div className="h-4 w-28 bg-gray-200 animate-pulse rounded" /></td>
+                    </tr>
+                  ))
+                ) : rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="px-4 py-10 text-center text-gray-500">
+                      ไม่พบข้อมูลในตัวกรองนี้
+                    </td>
+                  </tr>
+                ) : (
+                  rows.map((r) => {
+                    const isBL = r.user_id ? blacklistUserIds.has(r.user_id) : false;
+                    const size =
+                      typeof r.partysize === "string"
+                        ? r.partysize
+                        : typeof r.partysize === "number"
+                        ? r.partysize.toString()
+                        : "-";
+                    return (
+                      <tr key={r.id} className="border-b hover:bg-gray-50/60">
+                        <td className="px-4 py-3 font-medium text-gray-800">{r.queue_code ?? "-"}</td>
+                        <td className="px-4 py-3 text-gray-700">{formatDate(r.reservation_datetime)}</td>
+                        <td className="px-4 py-3 text-gray-700">{size}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+                              isCancelled(r.status ?? null)
+                                ? "bg-red-100 text-red-700"
+                                : "bg-emerald-100 text-emerald-700"
+                            }`}
+                          >
+                            {r.status ?? "-"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {r.user_id ? (r.user_id as string).slice(0, 8) : "-"}
+                        </td>
+                        <td className="px-4 py-3">
+                          {isBL && (
+                            <span className="inline-flex items-center rounded-full bg-amber-100 text-amber-800 px-2 py-0.5 text-xs font-medium">
+                              Blacklisted
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
       </main>
     </div>
   );

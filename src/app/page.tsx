@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
+
 type Reservation = {
   id: string;
   user_id: string | null;
@@ -50,7 +51,7 @@ export default function HomePage() {
 
     load();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, session: { user: { id: any; }; }) => {
       setUserId(session?.user?.id ?? null);
     });
 
