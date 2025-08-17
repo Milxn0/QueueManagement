@@ -34,7 +34,7 @@ export default function RegisterPage() {
         await supabase.from("users").upsert({
           id: u.user.id,
           email,
-          role: "user",
+          role: "customer",
         });
       }
 

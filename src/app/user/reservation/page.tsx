@@ -49,12 +49,14 @@ export default function ReservationPage() {
 
     loadUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, session: { user: { email: SetStateAction<string>; }; }) => {
-      setIsLoggedIn(!!session?.user);
-      if (session?.user?.email) {
-        setEmail(session.user.email);
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event: any, session: { user: { email: SetStateAction<string> } }) => {
+        setIsLoggedIn(!!session?.user);
+        if (session?.user?.email) {
+          setEmail(session.user.email);
+        }
       }
-    });
+    );
 
     return () => {
       mounted = false;
@@ -74,9 +76,11 @@ export default function ReservationPage() {
 
     loadUser();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, session: { user: any; }) => {
-      setIsLoggedIn(!!session?.user);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event: any, session: { user: any }) => {
+        setIsLoggedIn(!!session?.user);
+      }
+    );
 
     return () => {
       mounted = false;
@@ -145,7 +149,6 @@ export default function ReservationPage() {
       });
       if (insErr) throw insErr;
     } else {
-      
       await supabase
         .from("users")
         .update({
@@ -189,14 +192,17 @@ export default function ReservationPage() {
     throw new Error("ไม่สามารถบันทึกการจองได้ (queue_code ซ้ำหลายครั้ง)");
   };
 
-  const verifyOTP = async () => {
+  const verifyOTP = async (): Promise<boolean> => {
     setErr(null);
     setMsg(null);
-    if (!otp.trim()) return setErr("กรุณากรอกรหัส OTP");
+
+    if (!otp.trim()) {
+      setErr("กรุณากรอกรหัส OTP");
+      return false;
+    }
 
     setBusy(true);
     try {
-
       // ตรวจ OTP
       const { data, error } = await supabase
         .from("otp_verifications")
@@ -204,32 +210,37 @@ export default function ReservationPage() {
         .eq("phone", phone)
         .order("created_at", { ascending: false })
         .limit(1);
+
       if (error) throw error;
 
       const latest = data?.[0];
       if (!latest) {
         setErr("ไม่พบบันทึกรหัส OTP สำหรับเบอร์นี้");
-        return;
+        return false;
       }
       if (latest.otp_code !== otp) {
         setErr("รหัส OTP ไม่ถูกต้อง");
-        return;
+        return false;
       }
 
       // ดึงข้อมูล user
       const { data: u } = await supabase.auth.getUser();
       const authUser = u.user;
-      if (!authUser) throw new Error("กรุณาเข้าสู่ระบบอีกครั้ง");
+      if (!authUser) {
+        setErr("กรุณาเข้าสู่ระบบอีกครั้ง");
+        return false;
+      }
 
       const publicUserId = await ensureProfile({ id: authUser.id });
-
       const code = await insertReservationWithRetries(publicUserId);
 
       setMsg(
         `ยืนยัน OTP สำเร็จ และบันทึกการจองเรียบร้อย! รหัสคิวของคุณคือ ${code}`
       );
+      return true;
     } catch (e: any) {
       setErr(e?.message || "ไม่สามารถยืนยันรหัส OTP/บันทึกการจองได้");
+      return false;
     } finally {
       setBusy(false);
     }
@@ -276,7 +287,7 @@ export default function ReservationPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6">จองคิว</h1>
+      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">จองคิว</h1>
 
       {/* Stepper */}
       <div className="flex items-center gap-3 mb-6">
@@ -429,18 +440,19 @@ export default function ReservationPage() {
 
           <div className="flex items-center gap-3 pt-2">
             <button
-              onClick={verifyOTP}
+              onClick={async () => {
+                const ok = await verifyOTP();
+                if (ok) {
+                  // ไปหน้าหลักทันที (เลือกใช้ตัวใดตัวหนึ่ง)
+                  window.location.href = "/"; // วิธีง่ายสุด
+                  // หรือถ้าใช้ useRouter(): router.replace("/");
+                }
+                // ถ้าไม่กรอก/ผิด -> จะยังอยู่หน้านี้ และ setErr แล้ว
+              }}
               disabled={busy}
               className="rounded-xl bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-60"
             >
               {busy ? "กำลังตรวจสอบ..." : "ยืนยัน OTP และจองคิว"}
-            </button>
-
-            <button
-              onClick={() => setStep(1)}
-              className="rounded-xl border px-4 py-2 hover:bg-gray-50"
-            >
-              แก้ไขข้อมูล
             </button>
           </div>
         </section>

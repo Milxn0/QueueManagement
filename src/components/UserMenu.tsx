@@ -111,7 +111,23 @@ export default function UserMenu() {
                     </Link>
                   </>
                 )}
+                {profile?.role === "customer" &&( <>
+                <Link
+                      href="/user/profile"
+                      className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                      onClick={() => setOpen(false)}
+                    >
+                      โปรไฟล์
+                    </Link>
 
+                    <Link
+                      href="/user/queue-history"
+                      className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                      onClick={() => setOpen(false)}
+                    >
+                      ประวัติการจองคิว
+                    </Link>
+                </>)}
                 <button
                   className="px-3 py-2 rounded-lg hover:bg-gray-50 text-left text-sm text-red-500"
                   onClick={async () => {

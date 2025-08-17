@@ -88,7 +88,7 @@ export default function HomePage() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-      <h1 className="text-2xl font-bold">สถานะคิว</h1>
+      <h1 className="text-2xl font-bold text-indigo-600">สถานะคิว</h1>
 
       {err && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-700 text-sm">
@@ -98,7 +98,7 @@ export default function HomePage() {
 
       {/* คิวของฉัน */}
       <section className="space-y-4">
-        <h2 className="text-lg font-medium">คิวของฉัน</h2>
+        <h2 className="text-lg font-medium ">คิวของฉัน</h2>
         {!userId && (
           <div className="rounded-xl border px-4 py-5 bg-gray-50">
             <p className="text-sm">
