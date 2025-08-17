@@ -15,13 +15,13 @@ const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "month", label: "คิวเดือนนี้" },
   { key: "year", label: "คิวปีนี้" },
   { key: "cancelled", label: "คิวที่ยกเลิก" },
-  { key: "blacklist", label: "คิวที่ติด Blacklist" },
+
 ];
 
 type ReservationRow = {
   id: string;
   user_id: string | null;
-  reservation_datetime: string | null; // timestamptz
+  reservation_datetime: string | null;
   partysize: number | string | null;
   queue_code: string | null;
   status: string | null;

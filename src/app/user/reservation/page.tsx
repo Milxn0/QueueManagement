@@ -1,7 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { SetStateAction, useEffect, useState } from "react";
+import { SetStateAction, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 
@@ -30,18 +31,33 @@ export default function ReservationPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  // ----------auth + autofill profile (email/name/phone) ----------
   useEffect(() => {
     let mounted = true;
 
     const loadUser = async () => {
       const { data } = await supabase.auth.getUser();
       if (!mounted) return;
+
       const user = data.user;
       setIsLoggedIn(!!user);
 
-      // เติมอีเมลจาก auth.users
-      if (user?.email) {
-        setEmail(user.email);
+      // เติมอีเมลจาก auth (อ่านอย่างเดียว ไม่ให้แก้)
+      if (user?.email) setEmail(user.email);
+
+      // ดึงจากตาราง users เพื่อ autofill
+      if (user?.id) {
+        const { data: prof, error: pErr } = await supabase
+          .from("users")
+          .select("name, phone")
+          .eq("id", user.id)
+          .single();
+
+        if (!pErr && prof) {
+          if (prof.name && !fullName) setFullName(prof.name);
+          if (prof.phone && !phone) setPhone(prof.phone);
+        }
       }
 
       setLoading(false);
@@ -52,9 +68,7 @@ export default function ReservationPage() {
     const { data: sub } = supabase.auth.onAuthStateChange(
       (_event: any, session: { user: { email: SetStateAction<string> } }) => {
         setIsLoggedIn(!!session?.user);
-        if (session?.user?.email) {
-          setEmail(session.user.email);
-        }
+        if (session?.user?.email) setEmail(session.user.email);
       }
     );
 
@@ -62,8 +76,10 @@ export default function ReservationPage() {
       mounted = false;
       sub.subscription.unsubscribe();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [supabase]);
 
+  // ตรวจสถานะ login ซ้ำ
   useEffect(() => {
     let mounted = true;
 
@@ -287,39 +303,31 @@ export default function ReservationPage() {
 
   return (
     <main className="max-w-3xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">จองคิว</h1>
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+        <div className="p-6">
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            หน้าจองคิว
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+            ระบบจองคิว
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            สามารถกรอกข้อมูลและจองคิวได้ที่นี่
+          </p>
+        </div>
+      </div>
 
       {/* Stepper */}
       <div className="flex items-center gap-3 mb-6">
-        <div
-          className={`flex items-center gap-2 ${
-            step === 1 ? "text-indigo-700" : "text-gray-500"
-          }`}
-        >
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center border ${
-              step === 1
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white"
-            }`}
-          >
+        <div className={`flex items-center gap-2 ${step === 1 ? "text-indigo-700" : "text-gray-500"}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${step === 1 ? "bg-indigo-600 text-white border-indigo-600" : "bg-white"}`}>
             1
           </div>
           <span className="text-sm font-medium">กรอกข้อมูล</span>
         </div>
         <div className="h-px flex-1 bg-gray-200" />
-        <div
-          className={`flex items-center gap-2 ${
-            step === 2 ? "text-indigo-700" : "text-gray-500"
-          }`}
-        >
-          <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center border ${
-              step === 2
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white"
-            }`}
-          >
+        <div className={`flex items-center gap-2 ${step === 2 ? "text-indigo-700" : "text-gray-500"}`}>
+          <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${step === 2 ? "bg-indigo-600 text-white border-indigo-600" : "bg-white"}`}>
             2
           </div>
           <span className="text-sm font-medium">ยืนยัน OTP</span>
@@ -352,9 +360,7 @@ export default function ReservationPage() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">
-              เบอร์โทรศัพท์ (ใช้รับ OTP)
-            </label>
+            <label className="block text-sm mb-1">เบอร์โทรศัพท์ (ใช้รับ OTP)</label>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -364,14 +370,18 @@ export default function ReservationPage() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">อีเมล (ถ้ามี)</label>
+            <label className="block text-sm mb-1">อีเมล (อ่านอย่างเดียว)</label>
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
+              disabled  // ⬅️ ทำให้แก้ไม่ได้
+              className="w-full rounded-lg border px-3 py-2 bg-gray-50 text-gray-700 cursor-not-allowed"
               placeholder="you@example.com"
+              title="อีเมลใช้สำหรับเข้าสู่ระบบและไม่สามารถแก้ไขที่นี่"
             />
+            <p className="mt-1 text-xs text-gray-500">
+              อีเมลใช้สำหรับเข้าสู่ระบบเท่านั้น หากต้องการเปลี่ยนอีเมล โปรดติดต่อพนักงาน
+            </p>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-4">
@@ -381,9 +391,7 @@ export default function ReservationPage() {
                 type="number"
                 min={1}
                 value={partySize}
-                onChange={(e) =>
-                  setPartySize(parseInt(e.target.value || "1", 10))
-                }
+                onChange={(e) => setPartySize(parseInt(e.target.value || "1", 10))}
                 className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
@@ -411,9 +419,7 @@ export default function ReservationPage() {
 
           {otpSent && (
             <p className="text-xs text-gray-500">
-              รหัส OTP คือ{" "}
-              <span className="font-mono font-semibold">{otpSent}</span> —
-              DEMO!!!!!
+              รหัส OTP คือ <span className="font-mono font-semibold">{otpSent}</span> — DEMO!!!!!
             </p>
           )}
         </section>
@@ -423,8 +429,7 @@ export default function ReservationPage() {
       {step === 2 && (
         <section className="rounded-2xl border p-6 space-y-4">
           <div className="text-sm text-gray-700">
-            ส่งรหัสไปที่เบอร์ <b>{phone}</b> — กรอกรหัส 6 หลักเพื่อยืนยัน
-            และระบบจะบันทึกการจองให้โดยอัตโนมัติ
+            ส่งรหัสไปที่เบอร์ <b>{phone}</b> — กรอกรหัส 6 หลักเพื่อยืนยัน และระบบจะบันทึกการจองให้โดยอัตโนมัติ
           </div>
 
           <div>
@@ -443,11 +448,8 @@ export default function ReservationPage() {
               onClick={async () => {
                 const ok = await verifyOTP();
                 if (ok) {
-                  // ไปหน้าหลักทันที (เลือกใช้ตัวใดตัวหนึ่ง)
-                  window.location.href = "/"; // วิธีง่ายสุด
-                  // หรือถ้าใช้ useRouter(): router.replace("/");
+                  window.location.href = "/"; // หรือใช้ router.replace("/")
                 }
-                // ถ้าไม่กรอก/ผิด -> จะยังอยู่หน้านี้ และ setErr แล้ว
               }}
               disabled={busy}
               className="rounded-xl bg-emerald-600 text-white px-4 py-2 hover:bg-emerald-700 disabled:opacity-60"

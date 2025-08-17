@@ -51,9 +51,11 @@ export default function HomePage() {
 
     load();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, session: { user: { id: any; }; }) => {
-      setUserId(session?.user?.id ?? null);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_e: any, session: { user: { id: any } }) => {
+        setUserId(session?.user?.id ?? null);
+      }
+    );
 
     return () => {
       mounted = false;
@@ -88,7 +90,19 @@ export default function HomePage() {
 
   return (
     <main className="max-w-4xl mx-auto px-6 py-8 space-y-8">
-      <h1 className="text-2xl font-bold text-indigo-600">สถานะคิว</h1>
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+        <div className="p-6">
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            คิวของฉัน
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+            ตรวจสอบลำดับคิวปัจจุบัน
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            สามารถตรวจสอบลำดับคิวของตัวเองได้ที่นี่
+          </p>
+        </div>
+      </div>
 
       {err && (
         <div className="rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-red-700 text-sm">
@@ -117,7 +131,10 @@ export default function HomePage() {
               <div className="rounded-xl border px-4 py-5 bg-gray-50">
                 <p className="text-sm">
                   ตอนนี้คุณยังไม่มีคิว —{" "}
-                  <Link className="text-indigo-600 underline" href="/user/reservation">
+                  <Link
+                    className="text-indigo-600 underline"
+                    href="/user/reservation"
+                  >
                     จองคิว
                   </Link>{" "}
                   ได้เลย
@@ -133,7 +150,9 @@ export default function HomePage() {
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">วันเวลา</p>
-                  <p className="font-medium">{fmtTime(myReservation.reservation_datetime)}</p>
+                  <p className="font-medium">
+                    {fmtTime(myReservation.reservation_datetime)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">ถึงคิวฉันในอีก</p>

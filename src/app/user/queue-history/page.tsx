@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -6,6 +7,7 @@ import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 
 type Reservation = {
+  users: any;
   id: string;
   user_id: string;
   reservation_datetime: string;
@@ -102,7 +104,7 @@ export default function UserReservationHistoryPage() {
       const { data, error: qErr } = await supabase
         .from("reservations")
         .select(
-          "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id"
+          "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users ( name, phone )"
         )
         .eq("user_id", userData.user.id)
         .order("reservation_datetime", { ascending: false });
@@ -123,7 +125,7 @@ export default function UserReservationHistoryPage() {
     const { data, error: qErr } = await supabase
       .from("reservations")
       .select(
-        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id"
+        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users ( name, phone )"
       )
       .eq("user_id", me.id)
       .order("reservation_datetime", { ascending: false });
@@ -193,9 +195,20 @@ export default function UserReservationHistoryPage() {
   // ---------- UI ----------
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
-      <h1 className="text-2xl font-semibold mb-4 text-indigo-600">
-        ประวัติการจองของฉัน
-      </h1>
+      {/* Header */}
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+        <div className="p-6">
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            ประวัติการจองคิว
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+            ประวัติการจองคิว
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            สามารถตรวจสอบและแก้ไขคิวของตัวเองได้ที่นี่
+          </p>
+        </div>
+      </div>
 
       {loading && (
         <div className="space-y-3">
@@ -249,8 +262,8 @@ export default function UserReservationHistoryPage() {
                   <td className="px-4 py-3 font-medium">
                     {r.queue_code ?? "-"}
                   </td>
-                  <td></td>
-                  <td></td>
+                  <td className="px-4 py-3">{r.users?.name ?? "-"}</td>
+                  <td className="px-4 py-3">{r.users?.phone ?? "-"}</td>
                   <td className="px-4 py-3">
                     {formatBangkok(r.reservation_datetime)}
                   </td>
