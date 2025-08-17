@@ -253,6 +253,22 @@ export default function DashboardPage() {
         {/* สรุปสถิติ */}
         <section className="mb-8">
           <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Dashboard</h1>
+          {/* Toolbar: Export */}
+          <div className="flex flex-wrap items-center gap-3 mb-4">
+            <a
+              href="/api/export/reservations?range=today&include=pending,confirmed,seated,completed"
+              className="inline-flex items-center rounded-lg border px-3 py-2 hover:bg-gray-50"
+            >
+              ดาวน์โหลด Excel — วันนี้
+            </a>
+            <a
+              href="/api/export/reservations?range=month&include=pending,confirmed,seated,completed"
+              className="inline-flex items-center rounded-lg border px-3 py-2 hover:bg-gray-50"
+            >
+              ดาวน์โหลด Excel — เดือนนี้
+            </a>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
             {stats.map((stat, idx) => (
               <div key={idx} className={`rounded-2xl shadow-lg p-8 flex flex-col items-center ${stat.color}`}>
@@ -271,11 +287,10 @@ export default function DashboardPage() {
               <button
                 key={f.key}
                 onClick={() => setFilter(f.key)}
-                className={`rounded-xl px-3 py-1.5 text-sm border transition ${
-                  filter === f.key
+                className={`rounded-xl px-3 py-1.5 text-sm border transition ${filter === f.key
                     ? "bg-indigo-600 text-white border-indigo-600"
                     : "bg-white hover:bg-gray-50 border-gray-200 text-gray-700"
-                }`}
+                  }`}
               >
                 {f.label}
               </button>
@@ -321,8 +336,8 @@ export default function DashboardPage() {
                       typeof r.partysize === "string"
                         ? r.partysize
                         : typeof r.partysize === "number"
-                        ? r.partysize.toString()
-                        : "-";
+                          ? r.partysize.toString()
+                          : "-";
                     return (
                       <tr key={r.id} className="border-b hover:bg-gray-50/60">
                         <td className="px-4 py-3 font-medium text-gray-800">{r.queue_code ?? "-"}</td>
@@ -330,11 +345,10 @@ export default function DashboardPage() {
                         <td className="px-4 py-3 text-gray-700">{size}</td>
                         <td className="px-4 py-3">
                           <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-                              isCancelled(r.status ?? null)
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${isCancelled(r.status ?? null)
                                 ? "bg-red-100 text-red-700"
                                 : "bg-emerald-100 text-emerald-700"
-                            }`}
+                              }`}
                           >
                             {r.status ?? "-"}
                           </span>
