@@ -1,3 +1,5 @@
+"use client";
+
 import {
   Card,
   CardHeader,
@@ -7,28 +9,64 @@ import {
   Button,
 } from "@material-tailwind/react";
 
+interface MenuItem {
+  id: string;
+  name: string;
+  description: string;
+  price: number;
+  image: string;
+  category: string;
+}
 
-export function CardMenu() {
+interface CardMenuProps {
+  menuItem: MenuItem;
+  onOrder?: (item: MenuItem) => void;
+}
+
+export default function CardMenu({ menuItem, onOrder }: CardMenuProps) {
+  const handleOrder = () => {
+    if (onOrder) {
+      onOrder(menuItem);
+    }
+  };
+
   return (
-    <Card className="mt-6 w-96">
-      <CardHeader color="blue-gray" className="relative h-56">
+    <Card className="w-80 shadow-lg hover:shadow-xl transition-shadow duration-300">
+      {/* Header รูปภาพ */}
+      <CardHeader color="blue-gray" className="relative h-48">
         <img
-          src="https://images.unsplash.com/photo-1540553016722-983e48a2cd10?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=800&q=80"
-          alt="card-image"
+          src={menuItem.image}
+          alt={menuItem.name}
+          className="h-full w-full object-cover"
         />
+        <div className="absolute top-2 right-2 bg-red-500 text-white px-2 py-1 rounded-full text-xs font-semibold">
+          {menuItem.category}
+        </div>
       </CardHeader>
+
+      {/* เนื้อหา */}
       <CardBody>
-        <Typography variant="h5" color="blue-gray" className="mb-2">
-          UI/UX Review Check
+        <Typography variant="h5" color="blue-gray" className="mb-2 font-semibold">
+          {menuItem.name}
         </Typography>
-        <Typography>
-          The place is close to Barceloneta Beach and bus stop just 2 min by
-          walk and near to &quot;Naviglio&quot; where you can enjoy the main
-          night life in Barcelona.
+        <Typography className="text-gray-600 text-sm mb-3">
+          {menuItem.description}
+        </Typography>
+        <Typography variant="h6" color="red" className="font-bold">
+          ฿{menuItem.price.toLocaleString()}
         </Typography>
       </CardBody>
+
+      {/* Footer ปุ่ม */}
       <CardFooter className="pt-0">
-        <Button>Read More</Button>
+        <Button 
+          fullWidth={true} 
+          color="red"
+          onClick={handleOrder}
+          className="hover:bg-red-700 transition-colors"
+        >
+          สั่งอาหาร
+        </Button>
       </CardFooter>
     </Card>
   );
