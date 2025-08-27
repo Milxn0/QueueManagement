@@ -65,6 +65,13 @@ export default function Navbar() {
               label="ติดต่อเรา"
               active={pathname.startsWith("/user/contact")}
             />
+
+             <NavLink
+              href="/user/menu-users"
+              label="เมนู"
+              active={pathname.startsWith("/user/menu-users")}
+            />
+            
           </div>
         </div>
 
