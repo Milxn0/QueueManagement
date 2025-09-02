@@ -1,5 +1,8 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -15,28 +18,69 @@ type ReservationForDetail = {
   cancelled_reason?: string | null;
 };
 
+export type OccupiedItem = {
+  tableNo: number;
+  reservationId: string;
+  queue_code: string | null;
+  reservation_datetime: string; // ISO
+};
+
 type Props = {
   open: boolean;
   row: ReservationForDetail | null;
   onClose: () => void;
+
+  // actions (ส่งมาจากหน้าพ่อ)
   onConfirm: (id: string) => Promise<void> | void;
+  onCancel: (id: string, reason: string) => Promise<void> | void;
+
+  // เลือก/ย้ายโต๊ะ
+  currentTableNo: number | null; // โต๊ะปัจจุบันของ row นี้ (ถ้ามี)
+  occupied: OccupiedItem[]; // โต๊ะที่มีคิวอยู่ (เฉพาะยังไม่เกิน 2 ชม.)
+  onAssignTable: (
+    reservationId: string,
+    tableNo: number
+  ) => Promise<void> | void;
+  onMoveTable: (
+    reservationId: string,
+    fromNo: number,
+    toNo: number
+  ) => Promise<void> | void;
 };
+
+const TH_TZ = "Asia/Bangkok";
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 const formatDate = (value: string | null) => {
   if (!value) return "-";
   const d = new Date(value);
   return Number.isNaN(d.getTime())
     ? "-"
-    : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+    : d.toLocaleString("th-TH", {
+        dateStyle: "medium",
+        timeStyle: "short",
+        timeZone: TH_TZ,
+      });
 };
+
+const formatTime = (iso: string) =>
+  new Date(iso).toLocaleTimeString("th-TH", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: TH_TZ,
+  });
 
 const statusClass = (s: string | null) => {
   const v = (s ?? "").toLowerCase();
-  if (v.includes("cancel")) return "bg-red-100 text-red-700";
-  if (v === "pending") return "bg-yellow-100 text-yellow-700";
-  if (v === "confirm" || v === "confirmed") return "bg-indigo-100 text-indigo-700";
-  if (v === "seated") return "bg-emerald-100 text-emerald-700";
-  return "bg-gray-100 text-gray-700";
+  if (v.includes("cancel"))
+    return "bg-rose-100 text-rose-700 ring-1 ring-rose-200";
+  if (v === "pending")
+    return "bg-amber-100 text-amber-800 ring-1 ring-amber-200";
+  if (v === "confirm" || v === "confirmed")
+    return "bg-indigo-100 text-indigo-800 ring-1 ring-indigo-200";
+  if (v === "seated")
+    return "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200";
+  return "bg-gray-100 text-gray-700 ring-1 ring-gray-200";
 };
 
 export default function ReservationDetailModal({
@@ -44,107 +88,404 @@ export default function ReservationDetailModal({
   row,
   onClose,
   onConfirm,
+  onCancel,
+  currentTableNo,
+  occupied,
+  onAssignTable,
+  onMoveTable,
 }: Props) {
+  // ---------- Hooks ต้องอยู่ก่อนเสมอ ----------
+  // เก็บสถานะภายในเพื่อเปลี่ยนเป็น "seated" ทันทีหลังเลือกโต๊ะ
+  const [localStatus, setLocalStatus] = useState<string>(
+    (row?.status ?? "").toLowerCase()
+  );
+  useEffect(() => {
+    setLocalStatus((row?.status ?? "").toLowerCase());
+  }, [row?.id, row?.status, open]);
+
+  const status = localStatus;
+  const [busy, setBusy] = useState(false);
+
+  // ยกเลิกพร้อมเหตุผล
+  const [cancelStep, setCancelStep] = useState<0 | 1>(0);
+  const [reason, setReason] = useState("");
+  const minReasonLen = 3;
+
+  // เลือก/ย้ายโต๊ะ
+  const [tableStep, setTableStep] = useState<0 | 1>(0);
+  const tables = useMemo(() => Array.from({ length: 17 }, (_, i) => i + 1), []);
+  const occByTable = useMemo(() => {
+    const m = new Map<number, OccupiedItem>();
+    occupied.forEach((o) => m.set(o.tableNo, o));
+    return m;
+  }, [occupied]);
+
+  // (ย้ายมาตรงนี้) ป้องกันลำดับ hooks เปลี่ยน
   if (!open || !row) return null;
 
-  const v = (row.status ?? "").toLowerCase();
+  const handleClose = () => {
+    setCancelStep(0);
+    setTableStep(0);
+    setReason("");
+    onClose();
+  };
+
+  const submitCancel = async () => {
+    if (reason.trim().length < minReasonLen) return;
+    try {
+      setBusy(true);
+      await onCancel(row.id, reason.trim());
+      handleClose();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // ตรวจชนเวลาโต๊ะ (ช่วงห่างน้อยกว่า 2 ชม. ไม่อนุญาต)
+  const conflictMessage = (targetTable: number): string | null => {
+    const occ = occByTable.get(targetTable);
+    if (!occ || !row.reservation_datetime) return null;
+    const a = new Date(row.reservation_datetime).getTime();
+    const b = new Date(occ.reservation_datetime).getTime();
+    const diff = Math.abs(a - b);
+    if (diff < TWO_HOURS_MS) {
+      return `โต๊ะ ${targetTable} ถูกใช้ใกล้เวลา (คิว ${
+        occ.queue_code ?? occ.reservationId.slice(0, 6)
+      } เวลา ${formatTime(
+        occ.reservation_datetime
+      )}) — ต้องห่างอย่างน้อย 2 ชั่วโมง`;
+    }
+    return null;
+  };
+
+  const doPickTable = async (no: number) => {
+    if (busy) return;
+    const msg = conflictMessage(no);
+    if (msg) {
+      alert(msg);
+      return;
+    }
+    try {
+      setBusy(true);
+      if (currentTableNo != null) {
+        await onMoveTable(row.id, currentTableNo, no);
+      } else {
+        await onAssignTable(row.id, no);
+      }
+      // เปลี่ยนสถานะใน UI เป็น "seated" ทันที และกลับไปหน้า action
+      setLocalStatus("seated");
+      setTableStep(0);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center">
-      {/* backdrop */}
+    <div
+      className="fixed inset-0 z-[60] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+    >
+      {/* Backdrop */}
       <button
         aria-label="close-backdrop"
-        className="absolute inset-0 bg-black/40"
-        onClick={onClose}
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        onClick={handleClose}
       />
-      {/* dialog */}
-      <div className="relative bg-white rounded-2xl shadow-xl w-full max-w-lg p-6">
-        <div className="flex items-start justify-between mb-4">
-          <h3 className="text-lg font-semibold">รายละเอียดคิว</h3>
-          <button
-            onClick={onClose}
-            className="p-2 -m-2 text-gray-500 hover:text-gray-700"
-            aria-label="ปิด"
-          >
-            <FontAwesomeIcon icon={faXmark} />
-          </button>
+
+      {/* Dialog */}
+      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
+        {/* Header */}
+        <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4">
+          <div className="flex items-start justify-between">
+            <div>
+              <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                รายละเอียดคิว
+              </div>
+              <h3 className="mt-2 text-lg font-semibold text-gray-900">
+                {row.user?.name ?? "—"}
+              </h3>
+              <div className="mt-1 text-xs text-gray-600">
+                รหัสคิว{" "}
+                <span className="font-medium text-indigo-700">
+                  {row.queue_code ?? "—"}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={handleClose}
+              className="rounded-full p-2 text-gray-500 transition hover:bg-white hover:text-gray-700"
+              aria-label="ปิด"
+            >
+              <FontAwesomeIcon icon={faXmark} />
+            </button>
+          </div>
         </div>
 
-        <div className="space-y-2 text-sm text-gray-700 mb-4">
-          <div><span className="text-gray-500">คิว/โค้ด:</span> {row.queue_code ?? "-"}</div>
-          <div><span className="text-gray-500">ผู้จอง:</span> {row.user?.name ?? "-"}</div>
-          <div><span className="text-gray-500">วันที่-เวลา:</span> {formatDate(row.reservation_datetime)}</div>
-          <div>
-            <span className="text-gray-500">จำนวนที่นั่ง:</span>{" "}
-            {typeof row.partysize === "number" ? row.partysize : row.partysize ?? "-"}
-          </div>
-          <div>
-            <span className="text-gray-500">สถานะ:</span>
-            <span className={`ml-2 inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass(row.status)}`}>
-              {row.status ?? "-"}
-            </span>
+        {/* Body */}
+        <div className="px-6 py-5">
+          {/* Info grid */}
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
+              <div className="text-xs text-gray-500">วันเวลา</div>
+              <div className="mt-1 font-medium text-gray-900">
+                {formatDate(row.reservation_datetime)}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
+              <div className="text-xs text-gray-500">จำนวนที่นั่ง</div>
+              <div className="mt-1 font-medium text-gray-900">
+                {typeof row.partysize === "number"
+                  ? row.partysize
+                  : row.partysize ?? "—"}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
+              <div className="text-xs text-gray-500">สถานะ</div>
+              <span
+                className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass(
+                  status
+                )}`}
+              >
+                {status ?? "—"}
+              </span>
+              {currentTableNo != null && (
+                <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
+                  โต๊ะปัจจุบัน: {currentTableNo}
+                </span>
+              )}
+            </div>
           </div>
 
-          {v.includes("cancel") && (
-            <div className="pt-2 border-t">
-              <div className="text-gray-500">ผู้ยกเลิก:</div>
-              <div className="text-xs">
-                {row.cancelled_by
-                  ? `${row.cancelled_by.role ?? "—"} : ${row.cancelled_by.name ?? "—"}`
-                  : "—"}
+          {/* ถ้ายกเลิกแล้ว แสดงรายละเอียด */}
+          {status.includes("cancel") && (
+            <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3">
+              <div className="text-xs text-rose-700">ข้อมูลการยกเลิก</div>
+              <div className="mt-1 text-sm text-rose-900">
+                ผู้ยกเลิก:{" "}
+                <span className="font-medium">
+                  {row.cancelled_by
+                    ? `${row.cancelled_by.role ?? "—"} : ${
+                        row.cancelled_by.name ?? "—"
+                      }`
+                    : "—"}
+                </span>
               </div>
               {row.cancelled_reason && (
-                <div className="text-xs text-gray-500">สาเหตุ: {row.cancelled_reason}</div>
+                <div className="mt-1 text-xs text-rose-700">
+                  สาเหตุ: {row.cancelled_reason}
+                </div>
               )}
             </div>
           )}
-        </div>
 
-        <div className="flex items-center justify-end gap-2">
-          {v === "pending" && (
-            <button
-              type="button"
-              onClick={async () => {
-                await onConfirm(row.id);
-                onClose();
-              }}
-              className="rounded-xl bg-amber-500 text-white px-4 py-2 hover:bg-amber-600"
-            >
-              ยืนยันคิว
-            </button>
+          {/* Step: เลือกโต๊ะ */}
+          {tableStep === 1 && (
+            <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <div className="text-sm font-semibold text-indigo-800">
+                  เลือกโต๊ะ (1–17)
+                </div>
+                <div className="text-[11px] text-indigo-600">
+                  เงื่อนไข: คิวต้องห่างกันอย่างน้อย 2 ชม.
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {tables.map((no) => {
+                  const occ = occByTable.get(no);
+                  const conflict = conflictMessage(no) !== null;
+                  const isCurrent = currentTableNo === no;
+
+                  return (
+                    <button
+                      key={no}
+                      onClick={() => doPickTable(no)}
+                      disabled={busy || conflict || isCurrent}
+                      className={[
+                        "rounded-xl border px-3 py-2 text-left transition",
+                        isCurrent
+                          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          : occ
+                          ? "border-rose-300 bg-rose-50 text-rose-700"
+                          : "border-slate-200 bg-white hover:bg-slate-50",
+                        conflict ? "opacity-60" : "",
+                      ].join(" ")}
+                      title={
+                        conflict
+                          ? conflictMessage(no) ?? ""
+                          : occ
+                          ? `มีคิว ${
+                              occ.queue_code ?? occ.reservationId.slice(0, 6)
+                            } เวลา ${formatTime(occ.reservation_datetime)}`
+                          : "ว่าง"
+                      }
+                    >
+                      <div className="text-sm font-semibold">โต๊ะ {no}</div>
+                      <div className="text-[11px]">
+                        {isCurrent
+                          ? "โต๊ะปัจจุบัน"
+                          : occ
+                          ? ` ${
+                              occ.queue_code ?? occ.reservationId.slice(0, 6)
+                            }`
+                          : "ว่าง"}
+                      </div>
+                      {occ && (
+                        <div className="text-[11px] text-slate-500">
+                          {formatTime(occ.reservation_datetime)}
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setTableStep(0)}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
+                  disabled={busy}
+                >
+                  ย้อนกลับ
+                </button>
+              </div>
+            </div>
           )}
 
-          {(v === "confirm" || v === "confirmed") && (
-            <Link
-              href={`/admin/table?reservation=${row.id}`}
-              onClick={onClose}
-              className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
-            >
-              เลือกโต๊ะ
-            </Link>
+          {/* Actions */}
+          {tableStep === 0 && (
+            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+              {status === "pending" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setCancelStep(1)}
+                    className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
+                  >
+                    ยกเลิกคิว
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      await onConfirm(row.id);
+                      handleClose();
+                    }}
+                    className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-amber-600"
+                  >
+                    ยืนยันคิว
+                  </button>
+                </>
+              )}
+
+              {(status === "confirm" || status === "confirmed") && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelStep(0);
+                    setTableStep(1);
+                  }}
+                  className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                >
+                  {currentTableNo != null ? "ย้ายโต๊ะ" : "เลือกโต๊ะ"}
+                </button>
+              )}
+
+              {status === "seated" && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setCancelStep(0);
+                      setTableStep(1);
+                    }}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                  >
+                    ย้ายโต๊ะ
+                  </button>
+                  <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                    จัดการคิวเสร็จสิ้น
+                    <FontAwesomeIcon icon={faCircleCheck} />
+                  </span>
+                </>
+              )}
+
+              {status.includes("cancel") && (
+                <span className="inline-flex items-center gap-1 rounded-xl bg-rose-50 px-3 py-1.5 text-sm font-semibold text-rose-700 ring-1 ring-rose-200">
+                  ยกเลิกแล้ว
+                  <FontAwesomeIcon icon={faCircleCheck} />
+                </span>
+              )}
+
+              <button
+                type="button"
+                onClick={handleClose}
+                className="ml-auto rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
+              >
+                ปิด
+              </button>
+            </div>
           )}
 
-          {v === "seated" && (
-            <span className="text-emerald-600 font-semibold inline-flex items-center gap-1">
-              จัดการคิวเสร็จสิ้น
-              <FontAwesomeIcon icon={faCircleCheck} />
-            </span>
+          {/* Step 2: ฟอร์มเหตุผลการยกเลิก */}
+          {cancelStep === 1 && tableStep === 0 && (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-white p-4 ring-1 ring-rose-100">
+              <div className="mb-2 flex items-center justify-between">
+                <label className="text-sm font-medium text-rose-900">
+                  ระบุเหตุผลการยกเลิก <span className="text-rose-600">*</span>
+                </label>
+                <span className="text-xs text-rose-500">
+                  อย่างน้อย {minReasonLen} ตัวอักษร
+                </span>
+              </div>
+              <textarea
+                rows={4}
+                value={reason}
+                onChange={(e) => setReason(e.target.value)}
+                className="w-full rounded-xl border border-rose-200 bg-rose-50/30 px-3 py-2 text-sm outline-none transition placeholder:text-rose-300 focus:border-rose-400 focus:bg-white focus:ring-2 focus:ring-rose-200"
+                placeholder="เช่น ลูกค้าไม่สะดวกมาในเวลานี้ / จองซ้ำซ้อน / อื่น ๆ"
+              />
+              <div className="mt-3 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCancelStep(0);
+                    setReason("");
+                  }}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
+                  disabled={busy}
+                >
+                  ย้อนกลับ
+                </button>
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`text-xs ${
+                      reason.trim().length < minReasonLen
+                        ? "text-rose-500"
+                        : "text-emerald-600"
+                    }`}
+                  >
+                    {reason.trim().length} ตัวอักษร
+                  </span>
+                  <button
+                    type="button"
+                    onClick={submitCancel}
+                    disabled={busy || reason.trim().length < minReasonLen}
+                    className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-rose-700 disabled:opacity-60"
+                    title={
+                      reason.trim().length < minReasonLen
+                        ? `กรอกอย่างน้อย ${minReasonLen} ตัวอักษร`
+                        : ""
+                    }
+                  >
+                    {busy ? "กำลังยกเลิก..." : "ยืนยันการยกเลิก"}
+                  </button>
+                </div>
+              </div>
+            </div>
           )}
-
-          {v.includes("cancel") && (
-            <span className="text-rose-600 font-semibold inline-flex items-center gap-1">
-              ยกเลิกแล้ว
-              <FontAwesomeIcon icon={faCircleCheck} />
-            </span>
-          )}
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border px-4 py-2 hover:bg-gray-50"
-          >
-            ปิด
-          </button>
         </div>
       </div>
     </div>

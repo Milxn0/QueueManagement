@@ -92,15 +92,21 @@ export default function UserMenu() {
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
                       onClick={() => setOpen(false)}
                     >
-                      แดชบอร์ดแอดมิน
+                      จัดการคิว
                     </Link>
-
+                    <Link
+                      href="/admin/analytics"
+                      className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                      onClick={() => setOpen(false)}
+                    >
+                      สถิติการจอง
+                    </Link>
                     <Link
                       href="/admin/manage-queue"
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
                       onClick={() => setOpen(false)}
                     >
-                      จัดการคิว
+                      ประวัติการจองคิว
                     </Link>
                     <Link
                       href="/admin/manage-users"
@@ -111,8 +117,9 @@ export default function UserMenu() {
                     </Link>
                   </>
                 )}
-                {profile?.role === "customer" &&( <>
-                <Link
+                {profile?.role === "customer" && (
+                  <>
+                    <Link
                       href="/user/profile"
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
                       onClick={() => setOpen(false)}
@@ -127,7 +134,8 @@ export default function UserMenu() {
                     >
                       ประวัติการจองคิว
                     </Link>
-                </>)}
+                  </>
+                )}
                 <button
                   className="px-3 py-2 rounded-lg hover:bg-gray-50 text-left text-sm text-red-500"
                   onClick={async () => {

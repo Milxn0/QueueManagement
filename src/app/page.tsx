@@ -93,7 +93,7 @@ export default function HomePage() {
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-            คิวของฉัน
+           My Queue
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
             ตรวจสอบลำดับคิวปัจจุบัน

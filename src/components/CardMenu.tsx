@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 "use client";
 
 import {
@@ -46,7 +47,11 @@ export default function CardMenu({ menuItem, onOrder }: CardMenuProps) {
 
       {/* เนื้อหา */}
       <CardBody>
-        <Typography variant="h5" color="blue-gray" className="mb-2 font-semibold">
+        <Typography
+          variant="h5"
+          color="blue-gray"
+          className="mb-2 font-semibold"
+        >
           {menuItem.name}
         </Typography>
         <Typography className="text-gray-600 text-sm mb-3">
@@ -59,8 +64,8 @@ export default function CardMenu({ menuItem, onOrder }: CardMenuProps) {
 
       {/* Footer ปุ่ม */}
       <CardFooter className="pt-0">
-        <Button 
-          fullWidth={true} 
+        <Button
+          fullWidth={true}
           color="red"
           onClick={handleOrder}
           className="hover:bg-red-700 transition-colors"

@@ -24,7 +24,7 @@ export default function Page() {
       description: "หมูสามชั้นย่างเกาหลี พร้อมผักสดและซอส",
       price: 0,
       image: "/menu.jpg",
-      category: "หมู"
+      category: "หมู",
     },
     {
       id: "2",
@@ -32,7 +32,7 @@ export default function Page() {
       description: "ซี่โครงวัวหมักซอสเกาหลี ย่างไฟอ่อน",
       price: 399,
       image: "/menu.jpg",
-      category: "เนื้อวัว"
+      category: "เนื้อวัว",
     },
     {
       id: "3",
@@ -40,7 +40,7 @@ export default function Page() {
       description: "อกไก่หมักซอสเผ็ด ย่างกับผัก",
       price: 249,
       image: "/menu.jpg",
-      category: "ไก่"
+      category: "ไก่",
     },
     {
       id: "4",
@@ -48,7 +48,7 @@ export default function Page() {
       description: "ซุปไก่โสมเกาหลี ใส่ข้าวเหนียวและสมุนไพร",
       price: 199,
       image: "/menu.jpg",
-      category: "ซุป"
+      category: "ซุป",
     },
     {
       id: "5",
@@ -56,7 +56,7 @@ export default function Page() {
       description: "ข้าวผัดเกาหลีกับผักสด ไข่ดาว และซอสโกชูจัง",
       price: 179,
       image: "/menu.jpg",
-      category: "ข้าว"
+      category: "ข้าว",
     },
     {
       id: "6",
@@ -64,20 +64,21 @@ export default function Page() {
       description: "ซุปกิมจิเผ็ดร้อน ใส่หมูและเต้าหู้",
       price: 159,
       image: "/menu.jpg",
-      category: "ซุป"
-    }
+      category: "ซุป",
+    },
   ];
 
   // หมวดหมู่ทั้งหมด
   const categories = ["ทั้งหมด", "หมู", "เนื้อวัว", "ไก่", "ซุป", "ข้าว"];
 
   // กรองเมนูตามหมวดหมู่
-  const filteredMenuItems = selectedCategory === "ทั้งหมด" 
-    ? menuItems 
-    : menuItems.filter(item => item.category === selectedCategory);
+  const filteredMenuItems =
+    selectedCategory === "ทั้งหมด"
+      ? menuItems
+      : menuItems.filter((item) => item.category === selectedCategory);
 
   const handleOrder = (item: MenuItem) => {
-    setCart(prev => [...prev, item]);
+    setCart((prev) => [...prev, item]);
     alert(`เพิ่ม ${item.name} ลงในตะกร้าแล้ว!`);
   };
 
@@ -90,7 +91,9 @@ export default function Page() {
       <div className="max-w-7xl mx-auto px-4">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">เมนูอาหารเกาหลี</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+            เมนูอาหารเกาหลี
+          </h1>
           <p className="text-gray-600">เลือกเมนูที่คุณชื่นชอบ</p>
         </div>
 
@@ -114,7 +117,9 @@ export default function Page() {
         {/* ตะกร้าสินค้า */}
         {cart.length > 0 && (
           <div className="bg-white rounded-lg shadow-md p-4 mb-6">
-            <h3 className="text-lg font-semibold mb-3">ตะกร้าสินค้า ({cart.length} รายการ)</h3>
+            <h3 className="text-lg font-semibold mb-3">
+              ตะกร้าสินค้า ({cart.length} รายการ)
+            </h3>
             <div className="space-y-2">
               {cart.map((item, index) => (
                 <div key={index} className="flex justify-between items-center">
@@ -126,7 +131,9 @@ export default function Page() {
             <div className="border-t pt-3 mt-3">
               <div className="flex justify-between items-center font-bold text-lg">
                 <span>รวมทั้งหมด:</span>
-                <span className="text-red-600">฿{getTotalPrice().toLocaleString()}</span>
+                <span className="text-red-600">
+                  ฿{getTotalPrice().toLocaleString()}
+                </span>
               </div>
             </div>
           </div>
@@ -135,18 +142,16 @@ export default function Page() {
         {/* เมนูอาหาร */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {filteredMenuItems.map((item) => (
-            <CardMenu 
-              key={item.id} 
-              menuItem={item} 
-              onOrder={handleOrder}
-            />
+            <CardMenu key={item.id} menuItem={item} onOrder={handleOrder} />
           ))}
         </div>
 
         {/* แสดงข้อความเมื่อไม่มีเมนูในหมวดหมู่ที่เลือก */}
         {filteredMenuItems.length === 0 && (
           <div className="text-center py-12">
-            <p className="text-gray-500 text-lg">ไม่มีเมนูในหมวดหมู่ "{selectedCategory}"</p>
+            <p className="text-gray-500 text-lg">
+              ไม่มีเมนูในหมวดหมู่ "{selectedCategory}"
+            </p>
           </div>
         )}
       </div>

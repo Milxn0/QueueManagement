@@ -104,8 +104,9 @@ export default function UserReservationHistoryPage() {
       const { data, error: qErr } = await supabase
         .from("reservations")
         .select(
-          "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users ( name, phone )"
+          "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users!reservations_user_id_fkey(name, phone)"
         )
+
         .eq("user_id", userData.user.id)
         .order("reservation_datetime", { ascending: false });
 
@@ -125,8 +126,9 @@ export default function UserReservationHistoryPage() {
     const { data, error: qErr } = await supabase
       .from("reservations")
       .select(
-        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users ( name, phone )"
+        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users!reservations_user_id_fkey(name, phone)"
       )
+
       .eq("user_id", me.id)
       .order("reservation_datetime", { ascending: false });
 

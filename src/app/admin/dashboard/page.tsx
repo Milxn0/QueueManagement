@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
@@ -6,15 +5,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import {
-  faCheck,
-  faCircleCheck,
-  faXmark,
-} from "@fortawesome/free-solid-svg-icons"; // เปลี่ยนชื่อไอคอนตามที่ใช้จริง'
 import ReservationDetailModal from "@/components/ReservationDetailModal";
-
-type Stat = { label: string; value: number; color: string; text: string };
+import type { OccupiedItem } from "@/components/ReservationDetailModal";
 
 type FilterKey = "all" | "today" | "month" | "year" | "cancelled" | "blacklist";
 const FILTERS: { key: FilterKey; label: string }[] = [
@@ -39,15 +31,14 @@ type ReservationRow = {
     phone: string | null;
     email: string | null;
   } | null;
-
-  // ------- เพิ่มเฉพาะฟิลด์ที่ใช้แสดงผู้ยกเลิก -------
   cancelled_at?: string | null;
   cancelled_reason?: string | null;
-  cancelled_by?: {
-    name: string | null;
-    role?: string | null;
-  } | null;
+  cancelled_by?: { name: string | null; role?: string | null } | null;
+  // 👇 เพิ่ม relation ชื่อโต๊ะ
+  tbl?: { table_name: string | null } | null;
 };
+
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 export default function DashboardPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -69,39 +60,15 @@ export default function DashboardPage() {
     return () => sub.subscription.unsubscribe();
   }, [supabase]);
 
-  // ---------- Stats (นับจากตาราง reservations โดยตรง) ----------
-  const [stats, setStats] = useState<Stat[]>([
-    {
-      label: "จำนวนคิววันนี้",
-      value: 0,
-      color: "bg-blue-100",
-      text: "text-blue-700",
-    },
-    {
-      label: "จำนวนคิวเดือนนี้",
-      value: 0,
-      color: "bg-green-100",
-      text: "text-green-700",
-    },
-    {
-      label: "คิวไม่มาวันนี้ (cancelled)",
-      value: 0,
-      color: "bg-yellow-100",
-      text: "text-yellow-700",
-    },
-  ]);
-
+  // ---------- Date helpers ----------
   const startEnd = useCallback(() => {
-    // ใช้โซนเวลาบนเครื่องผู้ใช้ (ตรงกับภาพและ scenario ไทย)
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
-
     const startOfDay = new Date(y, m, now.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(y, m, now.getDate(), 23, 59, 59, 999);
     const startOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
     const startOfYear = new Date(y, 0, 1, 0, 0, 0, 0);
-
     const iso = (d: Date) => d.toISOString();
     return {
       startOfDayISO: iso(startOfDay),
@@ -111,59 +78,10 @@ export default function DashboardPage() {
     };
   }, []);
 
-  const fetchStats = useCallback(async () => {
-    const { startOfDayISO, endOfDayISO, startOfMonthISO } = startEnd();
-
-    // 1) today
-    const todayQ = supabase
-      .from("reservations")
-      .select("id", { count: "exact", head: true })
-      .gte("reservation_datetime", startOfDayISO)
-      .lte("reservation_datetime", endOfDayISO);
-
-    // 2) month
-    const monthQ = supabase
-      .from("reservations")
-      .select("id", { count: "exact", head: true })
-      .gte("reservation_datetime", startOfMonthISO);
-
-    // 3) cancelled today
-    const cancelledTodayQ = supabase
-      .from("reservations")
-      .select("id", { count: "exact", head: true })
-      .gte("reservation_datetime", startOfDayISO)
-      .lte("reservation_datetime", endOfDayISO)
-      .ilike("status", "%cancel%");
-
-    const [t, m, c] = await Promise.all([todayQ, monthQ, cancelledTodayQ]);
-
-    setStats([
-      {
-        label: "จำนวนคิววันนี้",
-        value: t.count ?? 0,
-        color: "bg-blue-100",
-        text: "text-blue-700",
-      },
-      {
-        label: "จำนวนคิวเดือนนี้",
-        value: m.count ?? 0,
-        color: "bg-green-100",
-        text: "text-green-700",
-      },
-      {
-        label: "คิวไม่มาวันนี้ (cancelled)",
-        value: c.count ?? 0,
-        color: "bg-yellow-100",
-        text: "text-yellow-700",
-      },
-    ]);
-  }, [startEnd, supabase]);
-
-  // ---------- Reservations table (ดึงจาก DB + กรองที่ DB) ----------
+  // ---------- Reservations table ----------
   const [filter, setFilter] = useState<FilterKey>("all");
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
-  const [detailRow, setDetailRow] = useState<ReservationRow | null>(null);
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
@@ -177,10 +95,10 @@ export default function DashboardPage() {
   id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
   user:users!reservations_user_id_fkey(name, phone, email),
   cancelled_at, cancelled_reason,
-  cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role)
+  cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
+  tbl:tables!reservations_table_id_fkey(table_name)
 `
       )
-
       .order("reservation_datetime", { ascending: false })
       .limit(200);
 
@@ -201,12 +119,11 @@ export default function DashboardPage() {
         break;
       case "all":
       default:
-        // no extra filter
         break;
     }
 
     const { data, error } = await q;
-    setRows(error ? [] : (data as ReservationRow[]));
+    setRows(error ? [] : ((data ?? []) as ReservationRow[]));
     setRowsLoading(false);
   }, [filter, startEnd, supabase]);
 
@@ -215,13 +132,11 @@ export default function DashboardPage() {
   const scheduleRefetch = useCallback(() => {
     if (refetchTimer.current) clearTimeout(refetchTimer.current);
     refetchTimer.current = setTimeout(() => {
-      fetchStats();
       fetchReservations();
     }, 250);
-  }, [fetchStats, fetchReservations]);
+  }, [fetchReservations]);
 
   useEffect(() => {
-    fetchStats();
     fetchReservations();
     const ch = supabase
       .channel("reservations-dashboard")
@@ -247,28 +162,32 @@ export default function DashboardPage() {
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
   const confirmReservation = useCallback(
     async (id: string) => {
       const { error } = await supabase
         .from("reservations")
-        .update({ status: "confirmed" }) // ใช้ "confirmed" ให้สอดคล้องกับที่ส่วนอื่นใช้อยู่
+        .update({ status: "confirmed" })
         .eq("id", id);
-
       if (error) {
         console.error("Update status failed:", error);
         return;
       }
-      // ให้รีเฟรชข้อมูลสั้นๆ (มี realtime อยู่แล้ว แต่นี่ช่วยให้ไวขึ้น)
       scheduleRefetch();
     },
     [supabase, scheduleRefetch]
   );
-  // เมื่อเปลี่ยนตัวกรอง → ดึงใหม่จาก DB
+
   useEffect(() => {
     fetchReservations();
   }, [filter, fetchReservations]);
 
   // ---------- helpers ----------
+  const parseTableNo = (name?: string | null) => {
+    if (!name) return null;
+    const m = name.match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  };
   const formatDate = (value: string | null) => {
     if (!value) return "-";
     const d = new Date(value);
@@ -285,6 +204,110 @@ export default function DashboardPage() {
     if (v === "seated") return "bg-emerald-100 text-emerald-700";
     return "bg-gray-100 text-gray-700";
   };
+
+  // ---------- เลือก/ย้ายโต๊ะ ----------
+  const findTableIdByNo = async (no: number) => {
+    // เราตั้งชื่อโต๊ะเป็น "โต๊ะ X" ชัดเจน จึงใช้ eq ได้เลย
+    const { data, error } = await supabase
+      .from("tables")
+      .select("id, table_name")
+      .eq("table_name", `โต๊ะ ${no}`)
+      .limit(1)
+      .single();
+    if (error || !data?.id) throw new Error(`ไม่พบโต๊ะหมายเลข ${no}`);
+    return data.id as string;
+  };
+
+  // แทนที่ฟังก์ชันเดิมทั้งก้อนนี้
+  const handleAssignTable = async (reservationId: string, tableNo: number) => {
+    const tableId = await findTableIdByNo(tableNo);
+
+    const { error } = await supabase
+      .from("reservations")
+      .update({ table_id: tableId, status: "seated" }) // 👈 อัปเดตสถานะด้วย
+      .eq("id", reservationId);
+
+    if (error) throw error;
+
+    // อัปเดตแถวในโมดัลทันที (optimistic) เพื่อให้เห็น "ย้ายโต๊ะ" ได้เลย
+    setDetailRow((prev) =>
+      prev && prev.id === reservationId
+        ? {
+            ...prev,
+            status: "seated",
+            table_id: tableId,
+            tbl: { table_name: `โต๊ะ ${tableNo}` },
+          }
+        : prev
+    );
+
+    scheduleRefetch();
+  };
+
+  const handleMoveTable = async (
+    reservationId: string,
+    _fromNo: number,
+    toNo: number
+  ) => {
+    const tableId = await findTableIdByNo(toNo);
+    const { error } = await supabase
+      .from("reservations")
+      .update({ table_id: tableId })
+      .eq("id", reservationId);
+    if (error) throw error;
+    scheduleRefetch();
+  };
+
+  // ---------- state สำหรับโมดัล ----------
+  const [detailRow, setDetailRow] = useState<ReservationRow | null>(null);
+  const [occupied, setOccupied] = useState<OccupiedItem[]>([]);
+  const [currentTableNo, setCurrentTableNo] = useState<number | null>(null);
+
+  const openDetail = useCallback(
+    async (r: ReservationRow) => {
+      setDetailRow(r);
+      setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
+
+      // โหลดโต๊ะที่ "จับอยู่แล้ว" ในช่วงเวลา ±2 ชม. ของคิวนี้ (ไม่นับตัวเอง)
+      if (!r.reservation_datetime) {
+        setOccupied([]);
+        return;
+      }
+      const base = new Date(r.reservation_datetime).getTime();
+      const start = new Date(base - TWO_HOURS_MS).toISOString();
+      const end = new Date(base + TWO_HOURS_MS).toISOString();
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select(
+          `id, queue_code, reservation_datetime, tbl:tables!reservations_table_id_fkey(table_name)`
+        )
+        .not("table_id", "is", null)
+        .neq("id", r.id)
+        .gte("reservation_datetime", start)
+        .lte("reservation_datetime", end);
+
+      if (error) {
+        console.error(error);
+        setOccupied([]);
+        return;
+      }
+
+      const occ: OccupiedItem[] =
+        (data ?? [])
+          .map((x: any) => ({
+            tableNo: parseTableNo(x?.tbl?.table_name ?? null) ?? -1,
+            reservationId: x.id as string,
+            queue_code: x.queue_code as string | null,
+            reservation_datetime: x.reservation_datetime as string,
+          }))
+          .filter((o: { tableNo: number }) => o.tableNo > 0) || [];
+
+      setOccupied(occ);
+    },
+    [supabase]
+  );
+
   // ---------- UI ----------
   if (loading) {
     return (
@@ -307,7 +330,7 @@ export default function DashboardPage() {
             กรุณาเข้าสู่ระบบก่อน
           </h1>
           <p className="text-sm text-amber-800/80 mt-1">
-            ต้องเข้าสู่ระบบเพื่อดูข้อมูลสถิติของร้าน
+            ต้องเข้าสู่ระบบเพื่อดูข้อมูลการจัดการคิว
           </p>
           <div className="mt-4 flex gap-3">
             <Link
@@ -331,41 +354,19 @@ export default function DashboardPage() {
   return (
     <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-start justify-center">
       <main className="max-w-6xl w-full">
-        {/* สรุปสถิติ */}
         <section className="mb-8">
-          <h1 className="text-2xl font-semibold mb-6 text-indigo-600">
-            Dashboard
-          </h1>
-          {/* Toolbar: Export */}
-          <div className="flex flex-wrap items-center gap-3 mb-4">
-            <a
-              href="/api/export/reservations?range=today&include=pending,confirmed,seated,completed"
-              className="inline-flex items-center rounded-lg border px-3 py-2 hover:bg-gray-50"
-            >
-              ดาวน์โหลด Excel — วันนี้
-            </a>
-            <a
-              href="/api/export/reservations?range=month&include=pending,confirmed,seated,completed"
-              className="inline-flex items-center rounded-lg border px-3 py-2 hover:bg-gray-50"
-            >
-              ดาวน์โหลด Excel — เดือนนี้
-            </a>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
-            {stats.map((stat, idx) => (
-              <div
-                key={idx}
-                className={`rounded-2xl shadow-lg p-8 flex flex-col items-center ${stat.color}`}
-              >
-                <div className={`text-4xl font-bold mb-2 ${stat.text}`}>
-                  {stat.value}
-                </div>
-                <div className="text-lg font-medium text-gray-700">
-                  {stat.label}
-                </div>
+          <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+            <div className="p-6">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                Queue-Management
               </div>
-            ))}
+              <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+                ตรวจสอบคิวและจัดการคิว
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">
+                ตรวจสอบคิวและจัดการคิวทั้งหมดได้ที่นี่
+              </p>
+            </div>
           </div>
         </section>
 
@@ -444,7 +445,7 @@ export default function DashboardPage() {
                       colSpan={6}
                       className="px-4 py-10 text-center text-gray-500"
                     >
-                      ไม่พบข้อมูลในตัวกรองนี้
+                      ไม่พบข้อมูลในตัวกรองนี้ หรือ ยังไม่มีรายการจองคิว
                     </td>
                   </tr>
                 ) : (
@@ -477,11 +478,17 @@ export default function DashboardPage() {
                           >
                             {r.status ?? "-"}
                           </span>
+                          {/* โชว์หมายเลขโต๊ะปัจจุบันถ้ามี */}
+                          {r.tbl?.table_name && (
+                            <span className="ml-2 text-xs text-slate-500">
+                              ({r.tbl.table_name})
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <button
                             type="button"
-                            onClick={() => setDetailRow(r)}
+                            onClick={() => openDetail(r)}
                             className="inline-flex items-center rounded-xl bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-900"
                           >
                             ดูรายละเอียด
@@ -495,11 +502,31 @@ export default function DashboardPage() {
             </table>
           </div>
         </section>
+
         <ReservationDetailModal
           open={!!detailRow}
           row={detailRow}
           onClose={() => setDetailRow(null)}
           onConfirm={confirmReservation}
+          onCancel={async (id, reason) => {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            await supabase
+              .from("reservations")
+              .update({
+                status: "cancelled",
+                cancelled_reason: reason,
+                cancelled_by_user_id: user?.id ?? null,
+                cancelled_at: new Date().toISOString(),
+              })
+              .eq("id", id);
+            scheduleRefetch();
+          }}
+          currentTableNo={currentTableNo}
+          onAssignTable={handleAssignTable}
+          onMoveTable={handleMoveTable}
+          occupied={occupied}
         />
       </main>
     </div>
