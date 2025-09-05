@@ -1,9 +1,6 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable react-hooks/rules-of-hooks */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
 
@@ -46,6 +43,9 @@ type Props = {
     fromNo: number,
     toNo: number
   ) => Promise<void> | void;
+
+  // 👇 เพิ่ม prop สำหรับโหมดดูอย่างเดียว (ใช้ใน ManageQueuesPage)
+  readOnly?: boolean;
 };
 
 const TH_TZ = "Asia/Bangkok";
@@ -93,9 +93,9 @@ export default function ReservationDetailModal({
   occupied,
   onAssignTable,
   onMoveTable,
+  readOnly = false, // 👈 default = false
 }: Props) {
   // ---------- Hooks ต้องอยู่ก่อนเสมอ ----------
-  // เก็บสถานะภายในเพื่อเปลี่ยนเป็น "seated" ทันทีหลังเลือกโต๊ะ
   const [localStatus, setLocalStatus] = useState<string>(
     (row?.status ?? "").toLowerCase()
   );
@@ -120,7 +120,6 @@ export default function ReservationDetailModal({
     return m;
   }, [occupied]);
 
-  // (ย้ายมาตรงนี้) ป้องกันลำดับ hooks เปลี่ยน
   if (!open || !row) return null;
 
   const handleClose = () => {
@@ -141,7 +140,6 @@ export default function ReservationDetailModal({
     }
   };
 
-  // ตรวจชนเวลาโต๊ะ (ช่วงห่างน้อยกว่า 2 ชม. ไม่อนุญาต)
   const conflictMessage = (targetTable: number): string | null => {
     const occ = occByTable.get(targetTable);
     if (!occ || !row.reservation_datetime) return null;
@@ -172,7 +170,6 @@ export default function ReservationDetailModal({
       } else {
         await onAssignTable(row.id, no);
       }
-      // เปลี่ยนสถานะใน UI เป็น "seated" ทันที และกลับไปหน้า action
       setLocalStatus("seated");
       setTableStep(0);
     } finally {
@@ -281,8 +278,8 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Step: เลือกโต๊ะ */}
-          {tableStep === 1 && (
+          {/* Step: เลือกโต๊ะ (ซ่อนทั้งหมดเมื่อ readOnly) */}
+          {!readOnly && tableStep === 1 && (
             <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="text-sm font-semibold text-indigo-800">
@@ -355,8 +352,8 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Actions */}
-          {tableStep === 0 && (
+          {/* Actions (ซ่อนทั้งหมดเมื่อ readOnly) */}
+          {!readOnly && tableStep === 0 && (
             <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
               {status === "pending" && (
                 <>
@@ -429,8 +426,8 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Step 2: ฟอร์มเหตุผลการยกเลิก */}
-          {cancelStep === 1 && tableStep === 0 && (
+          {/* Step 2: ฟอร์มเหตุผลการยกเลิก (ซ่อนเมื่อ readOnly) */}
+          {!readOnly && cancelStep === 1 && tableStep === 0 && (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-white p-4 ring-1 ring-rose-100">
               <div className="mb-2 flex items-center justify-between">
                 <label className="text-sm font-medium text-rose-900">

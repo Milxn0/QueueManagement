@@ -1,23 +1,23 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-
-type Role = "admin" | "staff" | "customer" | string;
-
-type AppUser = {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  role: Role;
-  created_at?: string | null;
-};
-
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import {
+  faUsersGear,
+  faTriangleExclamation,
+  faCircleCheck,
+  faMagnifyingGlass,
+  faEye,
+} from "@fortawesome/free-solid-svg-icons";
+import { faUserPlus } from "@fortawesome/free-solid-svg-icons";
+import AddUserModal from "@/components/AddUserModal";
+import UserDetailModal, { AppUser, Role } from "@/components/UserDetailModal";
 export default function ManageUsersPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -28,21 +28,55 @@ export default function ManageUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
 
-  // edit state
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState<Partial<AppUser>>({});
-  const [saving, setSaving] = useState(false);
+  // UI helpers
+  const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<
+    "all" | "admin" | "staff" | "customer"
+  >("all");
 
-  // delete state (confirm modal)
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete, setToDelete] = useState<AppUser | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  // Modal state
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailUser, setDetailUser] = useState<AppUser | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  // ---------------- data ----------------
+  const fetchUsers = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("users")
+      .select("id,name,email,phone,role,created_at");
 
+    if (error) {
+      setError(error.message);
+      setLoading(false);
+      return;
+    }
+
+    // admin ไว้บนสุด
+    const weight = (u: AppUser) => (u.role === "admin" ? 0 : 1);
+    const sorted = (data ?? [])
+      .slice()
+      .sort((a: AppUser, b: AppUser) => weight(a) - weight(b));
+
+    setUsers(sorted);
+    setLoading(false);
+  }, [supabase]);
+
+  // ---------------- derived ----------------
+  const filteredUsers = users.filter((u) => {
+    const passRole = roleFilter === "all" ? true : u.role === roleFilter;
+    if (!passRole) return false;
+    if (!search.trim()) return true;
+    const q = search.trim().toLowerCase();
+    const vals = [u.name, u.email, u.phone, u.role, u.id].map((x) =>
+      (x ?? "").toString().toLowerCase()
+    );
+    return vals.some((v) => v.includes(q));
+  });
   // ---------------- init / auth ----------------
   useEffect(() => {
     let mounted = true;
+    let ch: ReturnType<typeof supabase.channel> | null = null;
 
-    const init = async () => {
+    (async () => {
       setLoading(true);
       setError(null);
 
@@ -58,7 +92,6 @@ export default function ManageUsersPage() {
         return;
       }
 
-      // อ่าน role ของตัวเอง
       const { data: me, error: meErr } = await supabase
         .from("users")
         .select("role")
@@ -75,132 +108,51 @@ export default function ManageUsersPage() {
       setIsAdmin(admin);
 
       if (admin) {
-        await fetchUsers(); // ดึงทั้งหมด (RLS จะเปิดเฉพาะ admin)
-        const ch = supabase
+        await fetchUsers();
+        // ✅ subscribe แบบมี cleanup ที่ useEffect จะเรียกแน่ ๆ
+        ch = supabase
           .channel("users-changes")
-          .on("postgres_changes", { event: "*", schema: "public", table: "users" }, fetchUsers)
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public", table: "users" },
+            fetchUsers
+          )
           .subscribe();
-        return () => {
-          supabase.removeChannel(ch);
-        };
+      } else {
+        setLoading(false);
       }
-
-      setLoading(false);
-    };
-
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, session: { user: { id: any; }; }) => {
-      setIsLoggedIn(!!session?.user);
-      setCurrentUid(session?.user?.id ?? null);
-    });
+    })();
 
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      if (ch) supabase.removeChannel(ch);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]);
-
-  // ---------------- data ----------------
-  const fetchUsers = async () => {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,name,email,phone,role,created_at");
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    // admin ไว้บนสุด
-    const weight = (u: AppUser) => (u.role === "admin" ? 0 : 1);
-    const sorted = (data ?? []).slice().sort((a: AppUser, b: AppUser) => weight(a) - weight(b));
-
-    setUsers(sorted);
-    setLoading(false);
-  };
-
-  // ---------------- edit handlers ----------------
-  const startEdit = (u: AppUser) => {
-    setMsg(null);
-    setError(null);
-    setEditingId(u.id);
-    setForm({ name: u.name ?? "", email: u.email ?? "", phone: u.phone ?? "", role: u.role });
-  };
-
-  const cancelEdit = () => {
-    setEditingId(null);
-    setForm({});
-  };
-
-  const saveEdit = async () => {
-    if (!editingId) return;
-    setSaving(true);
-    setMsg(null);
-    setError(null);
-    try {
-      // กันไม่ให้ลดสิทธิ์ตัวเองผ่านหน้าจอนี้
-      const updatePayload: Partial<AppUser> = { ...form };
-      if (editingId === currentUid) {
-        delete updatePayload.role; // ไม่ให้แก้ role ของตัวเอง
-      }
-
-      const { error } = await supabase
-        .from("users")
-        .update(updatePayload)
-        .eq("id", editingId);
-
-      if (error) throw error;
-      setMsg("อัปเดตข้อมูลผู้ใช้สำเร็จ");
-      setEditingId(null);
-      setForm({});
-      await fetchUsers();
-    } catch (e: any) {
-      setError(e?.message || "ไม่สามารถบันทึกการแก้ไขได้");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  // ---------------- delete handlers ----------------
-  const askDelete = (u: AppUser) => {
-    setMsg(null);
-    setError(null);
-    if (u.id === currentUid) {
-      setError("ไม่สามารถลบบัญชีของตัวเองได้");
-      return;
-    }
-    setToDelete(u);
-    setConfirmOpen(true);
-  };
-
-  const doDelete = async () => {
-    if (!toDelete) return;
-    setDeleting(true);
-    setError(null);
-    setMsg(null);
-    try {
-      const { error } = await supabase.from("users").delete().eq("id", toDelete.id);
-      if (error) throw error;
-      setMsg("ลบผู้ใช้สำเร็จ");
-      setConfirmOpen(false);
-      setToDelete(null);
-      await fetchUsers();
-    } catch (e: any) {
-      setError(e?.message || "ไม่สามารถลบผู้ใช้ได้");
-    } finally {
-      setDeleting(false);
-    }
-  };
+    // 👉 ใส่ fetchUsers เป็น dependency ด้วย เพื่อได้ตัวอัปเดตล่าสุด
+  }, [supabase, fetchUsers]);
 
   // ---------------- UI states ----------------
   if (loading) {
     return (
-      <main className="max-w-5xl mx-auto px-6 py-10">
-        <div className="animate-pulse h-7 w-48 bg-gray-200 rounded mb-4" />
-        <div className="animate-pulse h-40 bg-gray-200 rounded" />
+      <main className="max-w-6xl mx-auto px-6 py-10">
+        <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/70">
+          <div className="p-6">
+            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+              <FontAwesomeIcon icon={faUsersGear} />
+              Manage Users
+            </div>
+            <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+              กำลังโหลด…
+            </h1>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {[...Array(6)].map((_, i) => (
+            <div
+              key={i}
+              className="h-24 animate-pulse rounded-2xl bg-gray-200"
+            />
+          ))}
+        </div>
       </main>
     );
   }
@@ -209,12 +161,20 @@ export default function ManageUsersPage() {
     return (
       <main className="max-w-xl mx-auto px-6 py-10">
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
-          <h1 className="text-lg font-semibold text-amber-800">กรุณาเข้าสู่ระบบก่อน</h1>
+          <h1 className="text-lg font-semibold text-amber-800">
+            กรุณาเข้าสู่ระบบก่อน
+          </h1>
           <div className="mt-3 flex gap-3">
-            <Link href="/auth/login" className="rounded-xl bg-indigo-600 text-white px-4 py-2">
+            <Link
+              href="/auth/login"
+              className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
+            >
               เข้าสู่ระบบ
             </Link>
-            <Link href="/auth/register" className="rounded-xl border px-4 py-2">
+            <Link
+              href="/auth/register"
+              className="rounded-xl border px-4 py-2 hover:bg-gray-50"
+            >
               สมัครสมาชิก
             </Link>
           </div>
@@ -227,7 +187,9 @@ export default function ManageUsersPage() {
     return (
       <main className="max-w-xl mx-auto px-6 py-10">
         <div className="rounded-2xl border border-red-300 bg-red-50 p-6 text-red-700">
-          <h1 className="text-lg font-semibold">403 – ต้องเป็นแอดมินเท่านั้น</h1>
+          <h1 className="text-lg font-semibold">
+            403 – ต้องเป็นแอดมินเท่านั้น
+          </h1>
           <p className="text-sm mt-1">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</p>
         </div>
       </main>
@@ -235,178 +197,180 @@ export default function ManageUsersPage() {
   }
 
   return (
-    <main className="max-w-5xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Manage Users</h1>
+    <main className="max-w-6xl mx-auto px-6 py-10">
+      {/* Header */}
+      <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/70">
+        <div className="p-6">
+          <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            <FontAwesomeIcon icon={faUsersGear} />
+            Manage
+          </div>
+          <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+            จัดการผู้ใช้ในระบบ
+          </h1>
+          <p className="mt-1 text-sm text-gray-600">
+            เปิดดูรายละเอียด / แก้ไข / รีเซ็ตรหัสผ่าน / ลบ ได้
+          </p>
+        </div>
+      </div>
 
+      {/* Alerts */}
       {error && (
-        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-rose-700">
+          <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5" />
+          <div className="text-sm">{error}</div>
         </div>
       )}
       {msg && (
-        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {msg}
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-emerald-700">
+          <FontAwesomeIcon icon={faCircleCheck} className="mt-0.5" />
+          <div className="text-sm">{msg}</div>
         </div>
       )}
 
-      <div className="overflow-x-auto rounded-2xl border">
+      {/* Toolbar */}
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center">
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-gray-600">บทบาท</label>
+          <select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value as any)}
+            className="rounded-xl border px-3 py-2 text-sm"
+          >
+            <option value="all">ทั้งหมด</option>
+            <option value="admin">Admin</option>
+            <option value="manager">Manager</option>
+            <option value="staff">Staff</option>
+            <option value="customer">Customer</option>
+          </select>
+        </div>
+
+        <div className="md:ml-auto flex items-center gap-2">
+          <div className="relative">
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="ค้นหา: ชื่อ / อีเมล / เบอร์ / role / id"
+              className="w-72 rounded-xl border pl-9 pr-3 py-2 text-sm"
+            />
+            <FontAwesomeIcon
+              icon={faMagnifyingGlass}
+              className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"
+            />
+          </div>
+          <div className="text-xs text-gray-500">
+            พบ {filteredUsers.length} รายการ
+          </div>
+          <button
+            onClick={() => setAddOpen(true)}
+            className="ml-2 inline-flex items-center gap-2 rounded-xl bg-emerald-600 px-3 py-2 text-sm font-medium text-white hover:bg-emerald-700"
+          >
+            <FontAwesomeIcon icon={faUserPlus} />
+            เพิ่มผู้ใช้
+          </button>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-2xl border bg-white shadow-sm">
         <table className="min-w-full text-sm">
-          <thead className="bg-white text-indigo-600">
-            <tr className="text-left ">
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Name</th>
-              <th className="px-4 py-3">Email</th>
-              <th className="px-4 py-3">Phone</th>
-              <th className="px-4 py-3">User ID</th>
-              <th className="px-4 py-3 w-48">Actions</th>
+          <thead className="bg-gray-50 text-gray-700">
+            <tr className="text-left">
+              <th className="px-4 py-3 font-semibold">Role</th>
+              <th className="px-4 py-3 font-semibold">Name</th>
+              <th className="px-4 py-3 font-semibold">Email</th>
+              <th className="px-4 py-3 font-semibold">Phone</th>
+              <th className="px-4 py-3 font-semibold">User ID</th>
+              <th className="px-4 py-3 font-semibold w-36">Actions</th>
             </tr>
           </thead>
-          <tbody className="bg-white">
-            {users.map((u) => {
-              const isEditing = editingId === u.id;
-              const isSelf = currentUid === u.id;
-
-              return (
-                <tr key={u.id} className="border-t">
-                  {/* Role */}
+          <tbody>
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={6}
+                  className="px-4 py-10 text-center text-gray-500"
+                >
+                  ไม่พบผู้ใช้ตามเงื่อนไขที่ค้นหา
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((u) => (
+                <tr key={u.id} className="border-t hover:bg-gray-50/60">
                   <td className="px-4 py-3">
-                    {!isEditing ? (
-                      <span
-                        className={`inline-flex items-center rounded-full px-2 py-1 text-xs
-                        ${u.role === "admin" ? "bg-indigo-100 text-indigo-700" : "bg-gray-100 text-gray-700"}`}
-                      >
-                        {u.role}
-                      </span>
-                    ) : (
-                      <select
-                        className="rounded border px-2 py-1"
-                        value={(form.role as Role) ?? u.role}
-                        onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
-                        disabled={isSelf} // กันแก้ role ตัวเอง
-                      >
-                        <option value="admin">admin</option>
-                        <option value="staff">staff</option>
-                        <option value="customer">customer</option>
-                      </select>
-                    )}
+                    <span
+                      className={[
+                        "inline-flex items-center rounded-full px-2 py-1 text-xs ring-1",
+                        u.role === "admin"
+                          ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
+                          : u.role === "staff"
+                          ? "bg-amber-50 text-amber-700 ring-amber-200"
+                          : u.role === "manager"
+                          ? "bg-pink-50 text-pink-700 ring-pink-200"
+                          : "bg-gray-100 text-gray-700 ring-gray-200",
+                      ].join(" ")}
+                    >
+                      {u.role}
+                    </span>
                   </td>
-
-                  {/* Name */}
-                  <td className="px-4 py-3 text-center">
-                    {!isEditing ? (
-                      u.name ?? "-"
-                    ) : (
-                      <input
-                        className="w-full rounded border px-2 py-1"
-                        value={(form.name as string) ?? ""}
-                        onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
-                      />
-                    )}
+                  <td className="px-4 py-3">{u.name ?? "-"}</td>
+                  <td className="px-4 py-3">{u.email ?? "-"}</td>
+                  <td className="px-4 py-3">{u.phone ?? "-"}</td>
+                  <td className="px-4 py-3 font-mono text-[11px] text-gray-600">
+                    {u.id}
                   </td>
-
-                  {/* Email */}
                   <td className="px-4 py-3">
-                    {!isEditing ? (
-                      u.email ?? "-"
-                    ) : (
-                      <input
-                        type="email"
-                        className="w-full rounded border px-2 py-1"
-                        value={(form.email as string) ?? ""}
-                        onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                      />
-                    )}
-                  </td>
-
-                  {/* Phone */}
-                  <td className="px-4 py-3">
-                    {!isEditing ? (
-                      u.phone ?? "-"
-                    ) : (
-                      <input
-                        className="w-full rounded border px-2 py-1"
-                        value={(form.phone as string) ?? ""}
-                        onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                      />
-                    )}
-                  </td>
-
-                  {/* User ID */}
-                  <td className="px-4 py-3 font-mono text-[11px]">{u.id}</td>
-
-                  {/* Actions */}
-                  <td className="px-4 py-3">
-                    {!isEditing ? (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEdit(u)}
-                          className="rounded-lg border px-3 py-1 hover:bg-gray-50"
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => askDelete(u)}
-                          className="rounded-lg bg-red-600 text-white px-3 py-1 hover:bg-red-700 disabled:opacity-60"
-                          disabled={isSelf}
-                          title={isSelf ? "ห้ามลบบัญชีของตัวเอง" : ""}
-                        >
-                          Delete
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={saveEdit}
-                          disabled={saving}
-                          className="rounded-lg bg-emerald-600 text-white px-3 py-1 hover:bg-emerald-700 disabled:opacity-60"
-                        >
-                          {saving ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          onClick={cancelEdit}
-                          className="rounded-lg border px-3 py-1 hover:bg-gray-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
+                    {/* ลบปุ่ม Edit/Delete เดิมออก ใช้ปุ่มดูรายละเอียดแทน */}
+                    <button
+                      onClick={() => {
+                        setDetailUser(u);
+                        setDetailOpen(true);
+                        setMsg(null);
+                        setError(null);
+                      }}
+                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
+                    >
+                      <FontAwesomeIcon icon={faEye} />
+                      ดูรายละเอียด
+                    </button>
                   </td>
                 </tr>
-              );
-            })}
+              ))
+            )}
           </tbody>
         </table>
       </div>
 
-      {/* Confirm Delete Modal */}
-      {confirmOpen && toDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmOpen(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold">ยืนยันการลบผู้ใช้</h2>
-            <p className="text-sm text-gray-600 mt-2">
-              คุณต้องการลบผู้ใช้{" "}
-              <b>{toDelete.name || toDelete.email || toDelete.id}</b> ใช่หรือไม่?
-              การลบอาจกระทบข้อมูลที่ผูกอยู่ (เช่น การจอง)
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmOpen(false)}
-                className="rounded-lg border px-4 py-2 hover:bg-gray-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={doDelete}
-                disabled={deleting}
-                className="rounded-lg bg-red-600 text-white px-4 py-2 hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleting ? "กำลังลบ..." : "ลบ"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Modal */}
+      <UserDetailModal
+        open={detailOpen}
+        user={detailUser}
+        currentUid={currentUid}
+        onClose={() => setDetailOpen(false)}
+        onUpdated={async () => {
+          await fetchUsers();
+          setDetailUser((prev) =>
+            prev ? users.find((u) => u.id === prev.id) ?? prev : prev
+          );
+          setMsg("อัปเดตข้อมูลผู้ใช้สำเร็จ");
+          setTimeout(() => setMsg(null), 2000);
+        }}
+        onDeleted={async () => {
+          await fetchUsers();
+          setDetailOpen(false);
+          setMsg("ลบผู้ใช้สำเร็จ");
+          setTimeout(() => setMsg(null), 2000);
+        }}
+      />
+      <AddUserModal
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        onCreated={async () => {
+          await fetchUsers();
+          setMsg("สร้างผู้ใช้สำเร็จ");
+          setTimeout(() => setMsg(null), 2000);
+        }}
+      />
     </main>
   );
 }

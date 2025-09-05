@@ -116,31 +116,97 @@ export default function ReservationPage() {
       .padStart(2, "0");
     return `Q${base}${rand}`;
   };
+  // ตรวจว่าจองได้ตาม app_settings หรือไม่
+  const validateReservationTime = () => {
+    if (!settings) {
+      return {
+        ok: false as const,
+        msg: "ระบบกำลังโหลดการตั้งค่า กรุณาลองใหม่",
+      };
+    }
+    if (settings.is_system_open === false) {
+      return { ok: false as const, msg: "ขณะนี้ปิดการรับจองชั่วคราว" };
+    }
+    if (!dateTime) {
+      return { ok: false as const, msg: "กรุณาเลือกวันและเวลา" };
+    }
+
+    const d = new Date(dateTime);
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false as const, msg: "วันและเวลาไม่ถูกต้อง" };
+    }
+
+    // ห้ามย้อนหลัง
+    const now = new Date();
+    if (d.getTime() < now.getTime()) {
+      return { ok: false as const, msg: "เลือกวันเวลาในอนาคตเท่านั้น" };
+    }
+
+    // จำกัดจำนวนวันล่วงหน้า
+    const daysAhead = settings.days_ahead ?? 30;
+    const startOf = (x: Date) =>
+      new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const diffDays = Math.floor((startOf(d) - startOf(now)) / 86400000);
+    if (diffDays > daysAhead) {
+      return {
+        ok: false as const,
+        msg: `จองล่วงหน้าได้ไม่เกิน ${daysAhead} วัน`,
+      };
+    }
+
+    // อยู่ในช่วงเวลาเปิด-ปิดรายวัน
+    const [oh, om] = (settings.open_time || "09:00").split(":").map(Number);
+    const [ch, cm] = (settings.close_time || "21:00").split(":").map(Number);
+    const tMin = d.getHours() * 60 + d.getMinutes();
+    const openMin = oh * 60 + om;
+    const closeMin = ch * 60 + cm;
+
+    // รองรับกรณีร้านเปิดข้ามวัน (เช่น 18:00–02:00)
+    const within =
+      openMin <= closeMin
+        ? tMin >= openMin && tMin <= closeMin
+        : tMin >= openMin || tMin <= closeMin;
+
+    if (!within) {
+      return {
+        ok: false as const,
+        msg: `เวลาที่เลือกอยู่นอกช่วงรับจอง (${settings.open_time} – ${settings.close_time})`,
+      };
+    }
+
+    return { ok: true as const };
+  };
 
   const requestOTP = async () => {
     setErr(null);
     setMsg(null);
 
-    if (!fullName.trim()) return setErr("กรุณากรอกชื่อ-นามสกุล");
-    if (!phone.trim()) return setErr("กรุณากรอกเบอร์โทรศัพท์");
-    if (!dateTime.trim()) return setErr("กรุณาเลือกวันและเวลา");
+    // ตรวจฟิลด์บังคับ
+    if (!fullName.trim()) throw new Error("กรุณากรอกชื่อ-นามสกุล");
+    if (!phone.trim()) throw new Error("กรุณากรอกเบอร์โทรศัพท์");
+    if (!dateTime.trim()) throw new Error("กรุณาเลือกวันและเวลา");
     if (!partySize || partySize < 1)
-      return setErr("กรุณาระบุจำนวนคนให้ถูกต้อง");
+      throw new Error("กรุณาระบุจำนวนคนให้ถูกต้อง");
+
+    // ✅ ตรวจตาม app_settings
+    const v = validateReservationTime();
+    if (!v.ok) throw new Error(v.msg);
 
     setBusy(true);
     try {
       const code = genOTP();
-      // บันทึกลงตาราง otp_verifications
       const { error } = await supabase.from("otp_verifications").insert({
         phone,
         otp_code: code,
       });
       if (error) throw error;
+
       setOtpSent(code);
       setMsg("ส่งรหัส OTP แล้ว กรุณาตรวจสอบและใส่รหัสยืนยัน");
       setStep(2);
     } catch (e: any) {
-      setErr(e?.message || "ไม่สามารถส่งรหัส OTP ได้");
+      // โยนให้ปุ่มไปแสดง Toast
+      throw e;
     } finally {
       setBusy(false);
     }
@@ -262,6 +328,127 @@ export default function ReservationPage() {
     }
   };
 
+  const [settings, setSettings] = useState<{
+    is_system_open: boolean;
+    open_time: string;
+    close_time: string;
+    days_ahead: number;
+  } | null>(null);
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("is_system_open,open_time,close_time,days_ahead")
+        .eq("id", 1)
+        .maybeSingle();
+      setSettings(
+        data ?? {
+          is_system_open: true,
+          open_time: "09:00",
+          close_time: "21:00",
+          days_ahead: 30,
+        }
+      );
+    })();
+  }, [supabase]);
+  const [toast, setToast] = useState<{
+    type: "error" | "success" | "info";
+    message: string;
+  } | null>(null);
+  // --- Toast UI (วางในไฟล์เดียวกันกับหน้า Reservation) ---
+  function Toast({
+    type = "error",
+    message,
+    onClose,
+  }: {
+    type?: "error" | "success" | "info";
+    message: string;
+    onClose: () => void;
+  }) {
+    // auto-close 3s
+    useEffect(() => {
+      const t = setTimeout(onClose, 3000);
+      return () => clearTimeout(t);
+    }, [onClose]);
+
+    const tone =
+      type === "success"
+        ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+        : type === "info"
+        ? "border-sky-200 bg-sky-50 text-sky-800"
+        : "border-rose-200 bg-rose-50 text-rose-800";
+
+    return (
+      <div className="fixed right-4 top-4 z-[70]">
+        <div
+          className={`max-w-xs rounded-xl border px-4 py-3 text-sm shadow ${tone}`}
+        >
+          <div className="flex items-start gap-3">
+            <div className="font-medium">
+              {type === "error"
+                ? "แจ้งเตือน"
+                : type === "success"
+                ? "สำเร็จ"
+                : "ข้อมูล"}
+            </div>
+            <button
+              onClick={onClose}
+              className="ml-auto rounded-md px-2 py-0.5 text-xs hover:opacity-70"
+              aria-label="ปิดแจ้งเตือน"
+            >
+              ปิด
+            </button>
+          </div>
+          <div className="mt-1 leading-5">{message}</div>
+        </div>
+      </div>
+    );
+  }
+
+  const d = new Date(dateTime); // สิ่งที่ผู้ใช้เลือก
+  const hh = d.getHours() * 60 + d.getMinutes();
+  const [oh, om] = (settings?.open_time ?? "09:00").split(":").map(Number);
+  const [ch, cm] = (settings?.close_time ?? "21:00").split(":").map(Number);
+  const openMin = oh * 60 + om;
+  const closeMin = ch * 60 + cm;
+  // ใหม่: ตรวจเฉพาะตอนกด "ถัดไป" แล้วแจ้งเตือนแบบ Toast
+  const handleNext = async () => {
+    if (!settings) return;
+
+    // ตรวจช่วงเวลาจาก app_settings
+    const d = new Date(dateTime);
+    if (Number.isNaN(d.getTime())) {
+      setToast({ type: "error", message: "กรุณาเลือกวันและเวลาให้ถูกต้อง" });
+      return;
+    }
+
+    const hh = d.getHours() * 60 + d.getMinutes();
+    const [oh, om] = (settings.open_time ?? "09:00").split(":").map(Number);
+    const [ch, cm] = (settings.close_time ?? "21:00").split(":").map(Number);
+    const openMin = oh * 60 + om;
+    const closeMin = ch * 60 + cm;
+
+    if (hh < openMin || hh > closeMin) {
+      setToast({
+        type: "error",
+        message: `เวลาที่เลือกอยู่นอกช่วงรับจอง (${settings.open_time} – ${settings.close_time})`,
+      });
+      return;
+    }
+
+    // ถ้าปิดระบบ
+    if (settings.is_system_open === false) {
+      setToast({
+        type: "error",
+        message: "ขณะนี้ปิดการรับจองชั่วคราว",
+      });
+      return;
+    }
+
+    // ✅ ผ่านเงื่อนไขแล้วค่อยไปขั้นถัดไป
+    // ... proceed next step ...
+  };
+
   // ---------- UI ----------
   if (loading) {
     return (
@@ -319,15 +506,35 @@ export default function ReservationPage() {
 
       {/* Stepper */}
       <div className="flex items-center gap-3 mb-6">
-        <div className={`flex items-center gap-2 ${step === 1 ? "text-indigo-700" : "text-gray-500"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${step === 1 ? "bg-indigo-600 text-white border-indigo-600" : "bg-white"}`}>
+        <div
+          className={`flex items-center gap-2 ${
+            step === 1 ? "text-indigo-700" : "text-gray-500"
+          }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+              step === 1
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white"
+            }`}
+          >
             1
           </div>
           <span className="text-sm font-medium">กรอกข้อมูล</span>
         </div>
         <div className="h-px flex-1 bg-gray-200" />
-        <div className={`flex items-center gap-2 ${step === 2 ? "text-indigo-700" : "text-gray-500"}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center border ${step === 2 ? "bg-indigo-600 text-white border-indigo-600" : "bg-white"}`}>
+        <div
+          className={`flex items-center gap-2 ${
+            step === 2 ? "text-indigo-700" : "text-gray-500"
+          }`}
+        >
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center border ${
+              step === 2
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white"
+            }`}
+          >
             2
           </div>
           <span className="text-sm font-medium">ยืนยัน OTP</span>
@@ -360,7 +567,9 @@ export default function ReservationPage() {
           </div>
 
           <div>
-            <label className="block text-sm mb-1">เบอร์โทรศัพท์ (ใช้รับ OTP)</label>
+            <label className="block text-sm mb-1">
+              เบอร์โทรศัพท์ (ใช้รับ OTP)
+            </label>
             <input
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
@@ -374,13 +583,14 @@ export default function ReservationPage() {
             <input
               type="email"
               value={email}
-              disabled  // ⬅️ ทำให้แก้ไม่ได้
+              disabled // ⬅️ ทำให้แก้ไม่ได้
               className="w-full rounded-lg border px-3 py-2 bg-gray-50 text-gray-700 cursor-not-allowed"
               placeholder="you@example.com"
               title="อีเมลใช้สำหรับเข้าสู่ระบบและไม่สามารถแก้ไขที่นี่"
             />
             <p className="mt-1 text-xs text-gray-500">
-              อีเมลใช้สำหรับเข้าสู่ระบบเท่านั้น หากต้องการเปลี่ยนอีเมล โปรดติดต่อพนักงาน
+              อีเมลใช้สำหรับเข้าสู่ระบบเท่านั้น หากต้องการเปลี่ยนอีเมล
+              โปรดติดต่อพนักงาน
             </p>
           </div>
 
@@ -391,27 +601,81 @@ export default function ReservationPage() {
                 type="number"
                 min={1}
                 value={partySize}
-                onChange={(e) => setPartySize(parseInt(e.target.value || "1", 10))}
+                onChange={(e) =>
+                  setPartySize(parseInt(e.target.value || "1", 10))
+                }
                 className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
               />
             </div>
 
             <div>
               <label className="block text-sm mb-1">วันและเวลา</label>
-              <input
-                type="datetime-local"
-                value={dateTime}
-                onChange={(e) => setDateTime(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400"
-              />
+
+              {settings?.is_system_open === false && (
+                <div className="mb-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                  ขณะนี้ปิดการรับจองชั่วคราว
+                </div>
+              )}
+
+              {(() => {
+                // คำนวณ min/max วันที่จาก days_ahead
+                const now = new Date();
+                const pad = (n: number) => String(n).padStart(2, "0");
+                const toInputValue = (d: Date) =>
+                  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(
+                    d.getDate()
+                  )}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+                const minDate = now; // ไม่ยอมย้อนอดีต
+                const maxDate = new Date(now);
+                const days = settings?.days_ahead ?? 30;
+                maxDate.setDate(now.getDate() + Math.max(0, days));
+
+                const minAttr = toInputValue(minDate);
+                const maxAttr = toInputValue(maxDate);
+
+                return (
+                  <>
+                    <input
+                      type="datetime-local"
+                      value={dateTime}
+                      onChange={(e) => setDateTime(e.target.value)}
+                      min={minAttr}
+                      max={maxAttr}
+                      disabled={settings?.is_system_open === false}
+                      className="w-full rounded-lg border px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-400 disabled:bg-gray-100 disabled:text-gray-500"
+                    />
+                    <p className="mt-1 text-xs text-gray-500">
+                      เวลาเปิดรับจองรายวัน: {settings?.open_time ?? "09:00"} –{" "}
+                      {settings?.close_time ?? "21:00"} / จองล่วงหน้าไม่เกิน{" "}
+                      {settings?.days_ahead ?? 30} วัน
+                    </p>
+                  </>
+                );
+              })()}
             </div>
           </div>
 
           <div className="pt-2">
             <button
-              onClick={requestOTP}
-              disabled={busy}
-              className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700 disabled:opacity-60"
+              type="button"
+              onClick={async () => {
+                try {
+                  await requestOTP();
+                  setToast({
+                    type: "success",
+                    message: "ส่งรหัส OTP แล้ว กรุณาตรวจอีเมล/เบอร์ของคุณ",
+                  });
+                } catch (e: any) {
+                  setToast({
+                    type: "error",
+                    message: e?.message || "ส่งรหัส OTP ไม่สำเร็จ",
+                  });
+                }
+              }}
+              disabled={busy || settings?.is_system_open === false}
+              aria-busy={busy || undefined}
+              className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed"
             >
               {busy ? "กำลังส่งรหัส..." : "ขอรหัส OTP"}
             </button>
@@ -419,7 +683,8 @@ export default function ReservationPage() {
 
           {otpSent && (
             <p className="text-xs text-gray-500">
-              รหัส OTP คือ <span className="font-mono font-semibold">{otpSent}</span> — DEMO!!!!!
+              รหัส OTP คือ{" "}
+              <span className="font-mono font-semibold">{otpSent}</span>
             </p>
           )}
         </section>
@@ -429,7 +694,8 @@ export default function ReservationPage() {
       {step === 2 && (
         <section className="rounded-2xl border p-6 space-y-4">
           <div className="text-sm text-gray-700">
-            ส่งรหัสไปที่เบอร์ <b>{phone}</b> — กรอกรหัส 6 หลักเพื่อยืนยัน และระบบจะบันทึกการจองให้โดยอัตโนมัติ
+            ส่งรหัสไปที่เบอร์ <b>{phone}</b> — กรอกรหัส 6 หลักเพื่อยืนยัน
+            และระบบจะบันทึกการจองให้โดยอัตโนมัติ
           </div>
 
           <div>
@@ -458,6 +724,13 @@ export default function ReservationPage() {
             </button>
           </div>
         </section>
+      )}
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.message}
+          onClose={() => setToast(null)}
+        />
       )}
     </main>
   );

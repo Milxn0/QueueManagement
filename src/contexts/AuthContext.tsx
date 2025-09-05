@@ -61,21 +61,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (_evt: any, sess: { user: { id: string; email: any; }; }) => {
-      if (!mounted) return;
-      if (sess?.user) {
-        const role = await fetchRole(sess.user.id);
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      async (_evt: any, sess: { user: { id: string; email: any } }) => {
         if (!mounted) return;
-        setState({
-          loading: false,
-          userId: sess.user.id,
-          email: sess.user.email ?? null,
-          role,
-        });
-      } else {
-        setState({ loading: false, userId: null, email: null, role: null });
+        if (sess?.user) {
+          const role = await fetchRole(sess.user.id);
+          if (!mounted) return;
+          setState({
+            loading: false,
+            userId: sess.user.id,
+            email: sess.user.email ?? null,
+            role,
+          });
+        } else {
+          setState({ loading: false, userId: null, email: null, role: null });
+        }
       }
-    });
+    );
 
     return () => {
       mounted = false;
@@ -86,7 +88,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const value: AuthContextValue = {
     ...state,
     signIn: async ({ email, password }) => {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
       if (error || !data.user) throw error ?? new Error("Sign-in failed");
       const role = await fetchRole(data.user.id); // ดึง role ครั้งเดียว
       setState({

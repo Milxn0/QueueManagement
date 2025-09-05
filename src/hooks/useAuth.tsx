@@ -2,7 +2,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
@@ -38,9 +45,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (mounted) setSession(data.session ?? null);
     })();
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_event: any, newSession: any) => {
-      setSession(newSession ?? null);
-    });
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_event: any, newSession: any) => {
+        setSession(newSession ?? null);
+      }
+    );
 
     return () => {
       sub.subscription.unsubscribe();

@@ -1,262 +1,333 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
+/* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
+import ReservationDetailModal from "@/components/ReservationDetailModal";
+import type { OccupiedItem } from "@/components/ReservationDetailModal";
+type FilterKey = "all" | "month" | "year" | "cancelled";
+const FILTERS: { key: FilterKey; label: string }[] = [
+  { key: "all", label: "คิวทั้งหมด" },
+  { key: "month", label: "คิวแบบเลือกเดือน" },
+  { key: "year", label: "คิวปีนี้" },
+  { key: "cancelled", label: "คิวที่ยกเลิก" },
+];
 
-type Status =
-  | "pending"
-  | "confirmed"
-  | "seated"
-  | "completed"
-  | "cancelled"
-  | "no_show"
-  | string;
-
-type Reservation = {
+type ReservationRow = {
   id: string;
-  user_id: string;
+  user_id: string | null;
+  reservation_datetime: string | null;
+  partysize: number | string | null;
   queue_code: string | null;
-  reservation_datetime: string; // ISO
-  partysize: number | null;
-  status: Status;
-  user?: { name: string | null; phone: string | null; email: string | null } | null;
+  status: string | null;
+  created_at: string | null;
+  table_id: string | null;
+  user?: {
+    name: string | null;
+    phone: string | null;
+    email: string | null;
+  } | null;
+  cancelled_at?: string | null;
+  cancelled_reason?: string | null;
+  cancelled_by?: { name: string | null; role?: string | null } | null;
+  tbl?: { table_name: string | null } | null;
 };
 
-export default function ManageQueuePage() {
-  const supabase = createClient();
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
-  // auth
+export default function ManageQueuesPage() {
+  const supabase = useMemo(() => createClient(), []);
+
+  // ---------- Auth gate ----------
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
-
-  // data
-  const [rows, setRows] = useState<Reservation[]>([]);
-  const [error, setError] = useState<string | null>(null);
-  const [msg, setMsg] = useState<string | null>(null);
-
-  // filters
-  const [q, setQ] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | Status>("all");
-
-  // dropdown menu state
-  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-  const menusRef = useRef<Record<string, HTMLDivElement | null>>({});
-
-  // delete confirm
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [toDelete, setToDelete] = useState<Reservation | null>(null);
-  const [deleting, setDeleting] = useState(false);
-
-  // --- helpers ---
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleString(undefined, {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-
-  const badge = (s: Status) => {
-    const map: Record<string, string> = {
-      pending: "bg-gray-100 text-gray-700",
-      confirmed: "bg-indigo-100 text-indigo-700",
-      seated: "bg-amber-100 text-amber-700",
-      completed: "bg-emerald-100 text-emerald-700",
-      cancelled: "bg-red-100 text-red-700",
-      no_show: "bg-yellow-100 text-yellow-700",
-    };
-    return map[s] || "bg-gray-100 text-gray-700";
-  };
-
-  // อนุญาต action ตามสถานะปัจจุบัน
-  const allowedTransitions: Record<Status, Status[]> = {
-    pending: ["confirmed", "seated", "cancelled", "no_show"],
-    confirmed: ["seated", "cancelled", "no_show", "completed"],
-    seated: ["completed", "cancelled", "no_show"],
-    completed: [],
-    cancelled: [],
-    no_show: [],
-  };
-
-  const can = (from: Status, to: Status) =>
-    allowedTransitions[from]?.includes(to);
-
-  // --- auth / bootstrap ---
   useEffect(() => {
     let mounted = true;
-
-    const init = async () => {
-      setLoading(true);
-      setError(null);
-
-      const { data: u } = await supabase.auth.getUser();
+    (async () => {
+      const { data } = await supabase.auth.getUser();
       if (!mounted) return;
-
-      const authUser = u.user;
-      setIsLoggedIn(!!authUser);
-
-      if (!authUser) {
-        setLoading(false);
-        return;
-      }
-
-      const { data: me, error: meErr } = await supabase
-        .from("users")
-        .select("role")
-        .eq("id", authUser.id)
-        .single();
-
-      if (meErr) {
-        setError(meErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const admin = me?.role === "admin";
-      setIsAdmin(admin);
-
-      if (admin) {
-        await fetchReservations();
-        const ch = supabase
-          .channel("reservations-changes")
-          .on("postgres_changes", { event: "*", schema: "public", table: "reservations" }, fetchReservations)
-          .subscribe();
-        return () => supabase.removeChannel(ch);
-      }
-
+      setIsLoggedIn(!!data.user);
       setLoading(false);
-    };
-
-    init();
-
-    const { data: sub } = supabase.auth.onAuthStateChange((_e: any, s: { user: any; }) => {
-      setIsLoggedIn(!!s?.user);
-    });
-
-    return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    })();
+    const { data: sub } = supabase.auth.onAuthStateChange(
+      (_e: any, s: { user: any }) => setIsLoggedIn(!!s?.user)
+    );
+    return () => sub.subscription.unsubscribe();
   }, [supabase]);
 
-  // --- fetch ---
-  const fetchReservations = async () => {
-    setMsg(null);
-    setError(null);
+  // ---------- helpers ----------
+  const startEnd = useCallback(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = now.getMonth();
+    const startOfYear = new Date(y, 0, 1, 0, 0, 0, 0);
+    const iso = (d: Date) => d.toISOString();
+    return { startOfYearISO: iso(startOfYear) };
+  }, []);
 
-    const { data, error } = await supabase
+  // เดือนที่เลือก (yyyy-MM)
+  const [selectedMonth, setSelectedMonth] = useState<string>(
+    new Date().toISOString().slice(0, 7)
+  );
+  const monthRange = useCallback((ym: string) => {
+    const [Y, M] = ym.split("-").map(Number);
+    const start = new Date(Y, (M ?? 1) - 1, 1, 0, 0, 0, 0);
+    const end = new Date(Y, M ?? 1, 0, 23, 59, 59, 999);
+    return { startISO: start.toISOString(), endISO: end.toISOString() };
+  }, []);
+
+  // ---------- Search ----------
+  const [search, setSearch] = useState("");
+  const norm = (v: unknown) => (v == null ? "" : String(v)).toLowerCase();
+
+  // ---------- Reservations ----------
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [rows, setRows] = useState<ReservationRow[]>([]);
+  const [rowsLoading, setRowsLoading] = useState(true);
+
+  const fetchReservations = useCallback(async () => {
+    setRowsLoading(true);
+    const { startOfYearISO } = startEnd();
+
+    let q = supabase
       .from("reservations")
       .select(
-        "id,user_id,queue_code,reservation_datetime,partysize,status,users(name,phone,email)"
+        `
+        id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
+        user:users!reservations_user_id_fkey(name, phone, email),
+        cancelled_at, cancelled_reason,
+        cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
+        tbl:tables!reservations_table_id_fkey(table_name)
+      `
       )
-      .order("reservation_datetime", { ascending: true });
+      .order("reservation_datetime", { ascending: false })
+      .limit(200);
 
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
+    switch (filter) {
+      case "month": {
+        const { startISO, endISO } = monthRange(selectedMonth);
+        q = q
+          .gte("reservation_datetime", startISO)
+          .lte("reservation_datetime", endISO);
+        break;
+      }
+      case "year":
+        q = q.gte("reservation_datetime", startOfYearISO);
+        break;
+      case "cancelled":
+        q = q.ilike("status", "%cancel%");
+        break;
+      case "all":
+      default:
+        break;
     }
 
-    const mapped: Reservation[] = (data as any[]).map((r) => ({
-      id: r.id,
-      user_id: r.user_id,
-      queue_code: r.queue_code ?? null,
-      reservation_datetime: r.reservation_datetime,
-      partysize: r.partysize ?? null,
-      status: r.status,
-      user: r.users
-        ? { name: r.users.name, phone: r.users.phone, email: r.users.email }
-        : null,
-    }));
+    const { data, error } = await q;
+    setRows(error ? [] : ((data ?? []) as ReservationRow[]));
+    setRowsLoading(false);
+  }, [filter, monthRange, selectedMonth, startEnd, supabase]);
 
-    setRows(mapped);
-    setLoading(false);
-  };
+  // Derived rows after client-side search
+  const displayRows = useMemo(() => {
+    const term = norm(search);
+    if (!term) return rows;
+    return rows.filter((r) => {
+      const values = [
+        r.queue_code,
+        r.user?.name,
+        r.user?.phone,
+        r.user?.email,
+        r.status,
+      ].map(norm);
+      return values.some((v) => v.includes(term));
+    });
+  }, [rows, search]);
 
-  // --- actions ---
-  const updateStatus = async (id: string, newStatus: Status) => {
-    setError(null);
-    setMsg(null);
-    const { error } = await supabase
-      .from("reservations")
-      .update({ status: newStatus })
-      .eq("id", id);
-    if (error) setError(error.message);
-    else setMsg("อัปเดตสถานะสำเร็จ");
-  };
+  // ---------- Realtime ----------
+  const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scheduleRefetch = useCallback(() => {
+    if (refetchTimer.current) clearTimeout(refetchTimer.current);
+    refetchTimer.current = setTimeout(() => {
+      fetchReservations();
+    }, 250);
+  }, [fetchReservations]);
 
-  const askDelete = (r: Reservation) => {
-    setToDelete(r);
-    setConfirmOpen(true);
-    setOpenMenuId(null);
-  };
-
-  const doDelete = async () => {
-    if (!toDelete) return;
-    setDeleting(true);
-    setError(null);
-    setMsg(null);
-    try {
+  useEffect(() => {
+    fetchReservations();
+    const ch = supabase
+      .channel("reservations-manage")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "reservations" },
+        scheduleRefetch
+      )
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "reservations" },
+        scheduleRefetch
+      )
+      .on(
+        "postgres_changes",
+        { event: "DELETE", schema: "public", table: "reservations" },
+        scheduleRefetch
+      )
+      .subscribe();
+    return () => {
+      if (refetchTimer.current) clearTimeout(refetchTimer.current);
+      supabase.removeChannel(ch);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    fetchReservations();
+  }, [filter, selectedMonth, fetchReservations]);
+  const confirmReservation = useCallback(
+    async (id: string) => {
       const { error } = await supabase
         .from("reservations")
-        .delete()
-        .eq("id", toDelete.id);
-      if (error) throw error;
-      setMsg("ลบคิวสำเร็จ");
-      setConfirmOpen(false);
-      setToDelete(null);
-    } catch (e: any) {
-      setError(e?.message || "ลบไม่สำเร็จ");
-    } finally {
-      setDeleting(false);
-    }
+        .update({ status: "confirmed" })
+        .eq("id", id);
+      if (error) {
+        console.error("Update status failed:", error);
+        return;
+      }
+      scheduleRefetch();
+    },
+    [supabase, scheduleRefetch]
+  );
+
+  // ---------- small helpers ----------
+  const parseTableNo = (name?: string | null) => {
+    if (!name) return null;
+    const m = name.match(/\d+/);
+    return m ? parseInt(m[0], 10) : null;
+  };
+  const formatDate = (value: string | null) => {
+    if (!value) return "-";
+    const d = new Date(value);
+    return Number.isNaN(d.getTime())
+      ? "-"
+      : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
+  };
+  const statusClass = (s: string | null) => {
+    const v = (s ?? "").toLowerCase();
+    if (v.includes("cancel")) return "bg-red-100 text-red-700";
+    if (v === "pending") return "bg-yellow-100 text-yellow-700";
+    if (v === "confirm" || v === "confirmed")
+      return "bg-indigo-100 text-indigo-700";
+    if (v === "seated") return "bg-emerald-100 text-emerald-700";
+    return "bg-gray-100 text-gray-700";
   };
 
-  // ปิด dropdown เมื่อคลิกนอกเมนู
-  useEffect(() => {
-    const onDocClick = (e: MouseEvent) => {
-      if (!openMenuId) return;
-      const target = e.target as Node;
-      const menuNode = menusRef.current[openMenuId];
-      if (menuNode && !menuNode.contains(target)) {
-        setOpenMenuId(null);
-      }
-    };
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [openMenuId]);
+  // ---------- เลือก/ย้ายโต๊ะ ----------
+  const findTableIdByNo = async (no: number) => {
+    const { data, error } = await supabase
+      .from("tables")
+      .select("id, table_name")
+      .eq("table_name", `โต๊ะ ${no}`)
+      .limit(1)
+      .single();
+    if (error || !data?.id) throw new Error(`ไม่พบโต๊ะหมายเลข ${no}`);
+    return data.id as string;
+  };
 
-  // --- filter + search ---
-  const filtered = useMemo(() => {
-    let arr = rows.slice();
-    if (statusFilter !== "all") arr = arr.filter((r) => r.status === statusFilter);
-    if (q.trim()) {
-      const s = q.toLowerCase();
-      arr = arr.filter((r) => {
-        const n = r.user?.name?.toLowerCase() || "";
-        const p = r.user?.phone?.toLowerCase() || "";
-        const code = (r.queue_code || "").toLowerCase();
-        return n.includes(s) || p.includes(s) || code.includes(s);
-      });
-    }
-    return arr.sort(
-      (a, b) =>
-        new Date(a.reservation_datetime).getTime() -
-        new Date(b.reservation_datetime).getTime()
+  const handleAssignTable = async (reservationId: string, tableNo: number) => {
+    const tableId = await findTableIdByNo(tableNo);
+    const { error } = await supabase
+      .from("reservations")
+      .update({ table_id: tableId, status: "seated" })
+      .eq("id", reservationId);
+    if (error) throw error;
+
+    setDetailRow((prev) =>
+      prev && prev.id === reservationId
+        ? {
+            ...prev,
+            status: "seated",
+            table_id: tableId,
+            tbl: { table_name: `โต๊ะ ${tableNo}` },
+          }
+        : prev
     );
-  }, [rows, statusFilter, q]);
+    scheduleRefetch();
+  };
+
+  const handleMoveTable = async (
+    reservationId: string,
+    _fromNo: number,
+    toNo: number
+  ) => {
+    const tableId = await findTableIdByNo(toNo);
+    const { error } = await supabase
+      .from("reservations")
+      .update({ table_id: tableId })
+      .eq("id", reservationId);
+    if (error) throw error;
+    scheduleRefetch();
+  };
+
+  // ---------- Modal state ----------
+  const [detailRow, setDetailRow] = useState<ReservationRow | null>(null);
+  const [occupied, setOccupied] = useState<OccupiedItem[]>([]);
+  const [currentTableNo, setCurrentTableNo] = useState<number | null>(null);
+
+  const openDetail = useCallback(
+    async (r: ReservationRow) => {
+      setDetailRow(r);
+      setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
+
+      if (!r.reservation_datetime) {
+        setOccupied([]);
+        return;
+      }
+      const base = new Date(r.reservation_datetime).getTime();
+      const start = new Date(base - TWO_HOURS_MS).toISOString();
+      const end = new Date(base + TWO_HOURS_MS).toISOString();
+
+      const { data, error } = await supabase
+        .from("reservations")
+        .select(
+          `id, queue_code, reservation_datetime, tbl:tables!reservations_table_id_fkey(table_name)`
+        )
+        .not("table_id", "is", null)
+        .neq("id", r.id)
+        .gte("reservation_datetime", start)
+        .lte("reservation_datetime", end);
+
+      if (error) {
+        console.error(error);
+        setOccupied([]);
+        return;
+      }
+
+      const occ: OccupiedItem[] =
+        (data ?? [])
+          .map((x: any) => ({
+            tableNo: parseTableNo(x?.tbl?.table_name ?? null) ?? -1,
+            reservationId: x.id as string,
+            queue_code: x.queue_code as string | null,
+            reservation_datetime: x.reservation_datetime as string,
+          }))
+          .filter((o: { tableNo: number }) => o.tableNo > 0) || [];
+
+      setOccupied(occ);
+    },
+    [supabase]
+  );
 
   // ---------- UI ----------
   if (loading) {
     return (
-      <main className="max-w-6xl mx-auto px-6 py-10">
-        <div className="animate-pulse h-7 w-48 bg-gray-200 rounded mb-4" />
-        <div className="animate-pulse h-40 bg-gray-200 rounded" />
+      <main className="max-w-4xl mx-auto px-6 py-10">
+        <div className="animate-pulse h-8 w-48 bg-gray-200 rounded mb-6" />
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="h-24 bg-gray-200 rounded-2xl animate-pulse" />
+          <div className="h-24 bg-gray-200 rounded-2xl animate-pulse" />
+          <div className="h-24 bg-gray-200 rounded-2xl animate-pulse" />
+        </div>
       </main>
     );
   }
@@ -265,12 +336,23 @@ export default function ManageQueuePage() {
     return (
       <main className="max-w-xl mx-auto px-6 py-10">
         <div className="rounded-2xl border border-amber-300 bg-amber-50 p-6">
-          <h1 className="text-lg font-semibold text-amber-800">กรุณาเข้าสู่ระบบก่อน</h1>
-          <div className="mt-3 flex gap-3">
-            <Link href="/auth/login" className="rounded-xl bg-indigo-600 text-white px-4 py-2">
+          <h1 className="text-xl font-semibold text-amber-800">
+            กรุณาเข้าสู่ระบบก่อน
+          </h1>
+          <p className="text-sm text-amber-800/80 mt-1">
+            ต้องเข้าสู่ระบบเพื่อดูข้อมูลการจัดการคิว
+          </p>
+          <div className="mt-4 flex gap-3">
+            <Link
+              href="/auth/login"
+              className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
+            >
               เข้าสู่ระบบ
             </Link>
-            <Link href="/auth/register" className="rounded-xl border px-4 py-2">
+            <Link
+              href="/auth/register"
+              className="rounded-xl border border-indigo-300 px-4 py-2 hover:bg-indigo-50"
+            >
               สมัครสมาชิก
             </Link>
           </div>
@@ -279,234 +361,208 @@ export default function ManageQueuePage() {
     );
   }
 
-  if (!isAdmin) {
-    return (
-      <main className="max-w-xl mx-auto px-6 py-10">
-        <div className="rounded-2xl border border-red-300 bg-red-50 p-6 text-red-700">
-          <h1 className="text-lg font-semibold">403 – ต้องเป็นแอดมินเท่านั้น</h1>
-          <p className="text-sm mt-1">คุณไม่มีสิทธิ์เข้าถึงหน้านี้</p>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10">
-      <h1 className="text-2xl font-semibold mb-6 text-indigo-600">Manage Queue</h1>
-
-      {error && (
-        <div className="mb-4 rounded-lg border border-red-300 bg-red-50 px-4 py-3 text-sm text-red-700">
-          {error}
-        </div>
-      )}
-      {msg && (
-        <div className="mb-4 rounded-lg border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">
-          {msg}
-        </div>
-      )}
-
-      {/* Filters */}
-      <div className="mb-4 flex flex-col sm:flex-row gap-3">
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="ค้นหา: ชื่อ / เบอร์ / รหัสคิว"
-          className="w-full sm:max-w-xs rounded-lg border px-3 py-2"
-        />
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as any)}
-          className="w-full sm:w-48 rounded-lg border px-3 py-2"
-        >
-          <option value="all">สถานะทั้งหมด</option>
-          <option value="pending">pending</option>
-          <option value="confirmed">confirmed</option>
-          <option value="seated">seated</option>
-          <option value="completed">completed</option>
-          <option value="cancelled">cancelled</option>
-          <option value="no_show">no_show</option>
-        </select>
-        <button
-          onClick={fetchReservations}
-          className="rounded-lg border px-3 py-2 hover:bg-gray-50"
-        >
-          รีเฟรช
-        </button>
-      </div>
-
-      <div className="overflow-x-auto rounded-2xl border shadow-md">
-        <table className="min-w-full text-sm">
-          <thead className="bg-white">
-            <tr className="text-left text-indigo-600">
-              <th className="px-4 py-3">เวลา</th>
-              <th className="px-4 py-3">รหัสคิว</th>
-              <th className="px-4 py-3">ชื่อ</th>
-              <th className="px-4 py-3">เบอร์</th>
-              <th className="px-4 py-3">จำนวนคน</th>
-              <th className="px-4 py-3">สถานะ</th>
-              <th className="px-4 py-3 w-[220px]">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="bg-white">
-            {filtered.map((r) => {
-              const menuOpen = openMenuId === r.id;
-              return (
-                <tr key={r.id} className="border-t">
-                  <td className="px-4 py-3 whitespace-nowrap">{fmt(r.reservation_datetime)}</td>
-                  <td className="px-4 py-3 font-mono">{r.queue_code ?? "-"}</td>
-                  <td className="px-4 py-3">{r.user?.name ?? "-"}</td>
-                  <td className="px-4 py-3">{r.user?.phone ?? "-"}</td>
-                  <td className="px-4 py-3">{r.partysize ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    <span className={`inline-flex rounded-full px-2 py-1 text-xs ${badge(r.status)}`}>
-                      {r.status}
-                    </span>
-                  </td>
-
-                  {/* Actions: Edit -> Dropdown */}
-                  <td className="px-4 py-3 relative">
-                    <button
-                      onClick={() => setOpenMenuId(menuOpen ? null : r.id)}
-                      className="rounded-lg border px-3 py-1.5 hover:bg-gray-50 inline-flex items-center gap-1"
-                    >
-                      Edit
-                      <svg width="14" height="14" viewBox="0 0 20 20" fill="none" aria-hidden>
-                        <path d="M5 7l5 5 5-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                      </svg>
-                    </button>
-
-                    {menuOpen && (
-                      <div
-                        ref={(el: HTMLDivElement | null) => {
-                          menusRef.current[r.id] = el;
-                        }}
-                        className="absolute right-0 z-20 mt-2 w-56 rounded-xl border bg-white shadow-lg"
-                      >
-                        <div className="py-1">
-                          {/* เปลี่ยนสถานะ */}
-                          <MenuItem
-                            disabled={!can(r.status, "confirmed")}
-                            onClick={() => {
-                              updateStatus(r.id, "confirmed");
-                              setOpenMenuId(null);
-                            }}
-                            label="Set status: confirmed"
-                          />
-                          <MenuItem
-                            disabled={!can(r.status, "seated")}
-                            onClick={() => {
-                              updateStatus(r.id, "seated");
-                              setOpenMenuId(null);
-                            }}
-                            label="Set status: seated"
-                          />
-                          <MenuItem
-                            disabled={!can(r.status, "completed")}
-                            onClick={() => {
-                              updateStatus(r.id, "completed");
-                              setOpenMenuId(null);
-                            }}
-                            label="Set status: completed"
-                          />
-                          <MenuItem
-                            disabled={!can(r.status, "no_show")}
-                            onClick={() => {
-                              updateStatus(r.id, "no_show");
-                              setOpenMenuId(null);
-                            }}
-                            label="Set status: no_show"
-                          />
-                          <MenuItem
-                            disabled={!can(r.status, "cancelled")}
-                            onClick={() => {
-                              updateStatus(r.id, "cancelled");
-                              setOpenMenuId(null);
-                            }}
-                            label="Set status: cancelled"
-                          />
-
-                          <div className="my-1 h-px bg-gray-100" />
-
-                          {/* ลบ */}
-                          <MenuItem
-                            danger
-                            onClick={() => askDelete(r)}
-                            label="Delete reservation"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              );
-            })}
-
-            {filtered.length === 0 && (
-              <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={7}>
-                  ไม่พบคิวตรงตามเงื่อนไข
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Confirm Delete Modal */}
-      {confirmOpen && toDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center">
-          <div className="absolute inset-0 bg-black/40" onClick={() => setConfirmOpen(false)} />
-          <div className="relative z-10 w-full max-w-md rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold">ยืนยันการลบคิว</h2>
-            <p className="text-sm text-gray-600 mt-2">
-              ต้องการลบคิว <b>{toDelete.queue_code || toDelete.id}</b> ใช่หรือไม่?
-            </p>
-            <div className="mt-5 flex justify-end gap-3">
-              <button
-                onClick={() => setConfirmOpen(false)}
-                className="rounded-lg border px-4 py-2 hover:bg-gray-50"
-              >
-                ยกเลิก
-              </button>
-              <button
-                onClick={doDelete}
-                disabled={deleting}
-                className="rounded-lg bg-red-600 text-white px-4 py-2 hover:bg-red-700 disabled:opacity-60"
-              >
-                {deleting ? "กำลังลบ..." : "ลบ"}
-              </button>
+    <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-start justify-center">
+      <main className="max-w-6xl w-full">
+        <section className="mb-8">
+          <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+            <div className="p-6">
+              <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+                Queue-Management
+              </div>
+              <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
+                จัดการคิวทั้งหมด
+              </h1>
+              <p className="mt-1 text-sm text-gray-600">
+                ดูคิวทั้งหมด / เลือกเดือน / ปี / ที่ยกเลิก + ค้นหา
+              </p>
             </div>
           </div>
-        </div>
-      )}
-    </main>
-  );
-}
+        </section>
 
-/** เมนูรายการมาตรฐาน */
-function MenuItem({
-  label,
-  onClick,
-  disabled,
-  danger,
-}: {
-  label: string;
-  onClick?: () => void;
-  disabled?: boolean;
-  danger?: boolean;
-}) {
-  return (
-    <button
-      disabled={disabled}
-      onClick={onClick}
-      className={[
-        "w-full text-left px-4 py-2 text-sm",
-        "hover:bg-gray-50",
-        disabled ? "opacity-40 cursor-not-allowed" : "",
-        danger ? "text-red-600 hover:bg-red-50" : "",
-      ].join(" ")}
-    >
-      {label}
-    </button>
+        <section className="bg-white rounded-2xl shadow-xl border">
+          {/* Filter + Search */}
+          <div className="p-4 flex flex-wrap items-center gap-2 border-b">
+            {FILTERS.map((f) => (
+              <button
+                key={f.key}
+                onClick={() => {
+                  setFilter(f.key);
+                  setSearch("");
+                }}
+                className={`rounded-xl px-3 py-1.5 text-sm border transition ${
+                  filter === f.key
+                    ? "bg-indigo-600 text-white border-indigo-600"
+                    : "bg-white hover:bg-gray-50 border-gray-200 text-gray-700"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+
+            {filter === "month" && (
+              <div className="ml-2 flex items-center gap-2">
+                <label className="text-sm text-gray-600">เดือน</label>
+                <input
+                  type="month"
+                  value={selectedMonth}
+                  onChange={(e) => setSelectedMonth(e.target.value)}
+                  className="rounded-xl border px-3 py-1.5 text-sm"
+                />
+              </div>
+            )}
+
+            {/* Search box */}
+            <div className="ml-auto flex items-center gap-2">
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="ค้นหา: โค้ดคิว / ชื่อ / เบอร์ / อีเมล"
+                className="w-72 rounded-xl border px-3 py-1.5 text-sm"
+              />
+              <div className="text-sm text-gray-500">
+                แสดง {displayRows.length} รายการ (ล่าสุด 200 แถว)
+              </div>
+            </div>
+          </div>
+
+          {/* Table */}
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left bg-gray-50 border-b">
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    คิว/โค้ด
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    ผู้จอง
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    วันที่-เวลา
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    จำนวนที่นั่ง
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700">
+                    สถานะ
+                  </th>
+                  <th className="px-4 py-3 font-semibold text-gray-700"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {rowsLoading ? (
+                  [...Array(6)].map((_, i) => (
+                    <tr key={i} className="border-b">
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-24 bg-gray-200 animate-pulse rounded" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-40 bg-gray-200 animate-pulse rounded" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-16 bg-gray-200 animate-pulse rounded" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-5 w-20 bg-gray-200 animate-pulse rounded-full" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-36 bg-gray-200 animate-pulse rounded" />
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
+                      </td>
+                    </tr>
+                  ))
+                ) : displayRows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-4 py-10 text-center text-gray-500"
+                    >
+                      ไม่พบข้อมูลตามเงื่อนไข/คำค้นหา
+                    </td>
+                  </tr>
+                ) : (
+                  displayRows.map((r) => {
+                    const size =
+                      typeof r.partysize === "string"
+                        ? r.partysize
+                        : typeof r.partysize === "number"
+                        ? r.partysize.toString()
+                        : "-";
+                    return (
+                      <tr key={r.id} className="border-b hover:bg-gray-50/60">
+                        <td className="px-4 py-3 font-medium text-gray-800">
+                          {r.queue_code ?? "-"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {r.user?.name
+                            ? (r.user?.name as string).slice(0, 24)
+                            : "-"}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">
+                          {formatDate(r.reservation_datetime)}
+                        </td>
+                        <td className="px-4 py-3 text-gray-700">{size}</td>
+                        <td className="px-4 py-3">
+                          <span
+                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass(
+                              r.status
+                            )}`}
+                          >
+                            {r.status ?? "-"}
+                          </span>
+                          {r.tbl?.table_name && (
+                            <span className="ml-2 text-xs text-slate-500">
+                              ({r.tbl.table_name})
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <button
+                            type="button"
+                            onClick={() => openDetail(r)}
+                            className="inline-flex items-center rounded-xl bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-900"
+                          >
+                            ดูรายละเอียด
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <ReservationDetailModal
+          open={!!detailRow}
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onConfirm={confirmReservation}
+          onCancel={async (id, reason) => {
+            const {
+              data: { user },
+            } = await supabase.auth.getUser();
+            await supabase
+              .from("reservations")
+              .update({
+                status: "cancelled",
+                cancelled_reason: reason,
+                cancelled_by_user_id: user?.id ?? null,
+                cancelled_at: new Date().toISOString(),
+              })
+              .eq("id", id);
+            scheduleRefetch();
+          }}
+          currentTableNo={currentTableNo}
+          onAssignTable={handleAssignTable}
+          onMoveTable={handleMoveTable}
+          occupied={occupied}
+          readOnly
+        />
+      </main>
+    </div>
   );
 }

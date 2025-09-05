@@ -1,10 +1,10 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
-
 type Row = {
   id: string;
   reservation_datetime: string;
@@ -288,6 +288,7 @@ export default function AnalyticsPage() {
   }, [rows, daysInMonth]);
 
   return (
+    
     <main className="max-w-6xl mx-auto px-6 py-10">
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
@@ -298,7 +299,7 @@ export default function AnalyticsPage() {
             สถิติการจอง
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            แสดงจำนวนคิวรายวัน แยกตามสถานะ — ช่วงเวลา: เดือนปัจจุบัน
+            สถิติการจอง ของคิวทั้งหมด
           </p>
         </div>
       </div>

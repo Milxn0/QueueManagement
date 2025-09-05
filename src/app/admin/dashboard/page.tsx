@@ -7,16 +7,6 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/ReservationDetailModal";
 import type { OccupiedItem } from "@/components/ReservationDetailModal";
-
-type FilterKey = "all" | "today" | "month" | "year" | "cancelled" | "blacklist";
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "คิวทั้งหมด" },
-  { key: "today", label: "คิววันนี้" },
-  { key: "month", label: "คิวเดือนนี้" },
-  { key: "year", label: "คิวปีนี้" },
-  { key: "cancelled", label: "คิวที่ยกเลิก" },
-];
-
 type ReservationRow = {
   id: string;
   user_id: string | null;
@@ -34,13 +24,12 @@ type ReservationRow = {
   cancelled_at?: string | null;
   cancelled_reason?: string | null;
   cancelled_by?: { name: string | null; role?: string | null } | null;
-  // 👇 เพิ่ม relation ชื่อโต๊ะ
   tbl?: { table_name: string | null } | null;
 };
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
-export default function DashboardPage() {
+export default function TodayQueuePage() {
   const supabase = useMemo(() => createClient(), []);
 
   // ---------- Auth gate ----------
@@ -61,71 +50,46 @@ export default function DashboardPage() {
   }, [supabase]);
 
   // ---------- Date helpers ----------
-  const startEnd = useCallback(() => {
+  const startEndToday = useCallback(() => {
     const now = new Date();
     const y = now.getFullYear();
     const m = now.getMonth();
     const startOfDay = new Date(y, m, now.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(y, m, now.getDate(), 23, 59, 59, 999);
-    const startOfMonth = new Date(y, m, 1, 0, 0, 0, 0);
-    const startOfYear = new Date(y, 0, 1, 0, 0, 0, 0);
     const iso = (d: Date) => d.toISOString();
     return {
       startOfDayISO: iso(startOfDay),
       endOfDayISO: iso(endOfDay),
-      startOfMonthISO: iso(startOfMonth),
-      startOfYearISO: iso(startOfYear),
     };
   }, []);
 
-  // ---------- Reservations table ----------
-  const [filter, setFilter] = useState<FilterKey>("all");
+  // ---------- Reservations (วันนี้เท่านั้น) ----------
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
-    const { startOfDayISO, endOfDayISO, startOfMonthISO, startOfYearISO } =
-      startEnd();
+    const { startOfDayISO, endOfDayISO } = startEndToday();
 
-    let q = supabase
+    const { data, error } = await supabase
       .from("reservations")
       .select(
         `
-  id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
-  user:users!reservations_user_id_fkey(name, phone, email),
-  cancelled_at, cancelled_reason,
-  cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
-  tbl:tables!reservations_table_id_fkey(table_name)
-`
+        id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
+        user:users!reservations_user_id_fkey(name, phone, email),
+        cancelled_at, cancelled_reason,
+        cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
+        tbl:tables!reservations_table_id_fkey(table_name)
+      `
       )
+      .gte("reservation_datetime", startOfDayISO)
+      .lte("reservation_datetime", endOfDayISO)
       .order("reservation_datetime", { ascending: false })
       .limit(200);
 
-    switch (filter) {
-      case "today":
-        q = q
-          .gte("reservation_datetime", startOfDayISO)
-          .lte("reservation_datetime", endOfDayISO);
-        break;
-      case "month":
-        q = q.gte("reservation_datetime", startOfMonthISO);
-        break;
-      case "year":
-        q = q.gte("reservation_datetime", startOfYearISO);
-        break;
-      case "cancelled":
-        q = q.ilike("status", "%cancel%");
-        break;
-      case "all":
-      default:
-        break;
-    }
-
-    const { data, error } = await q;
     setRows(error ? [] : ((data ?? []) as ReservationRow[]));
     setRowsLoading(false);
-  }, [filter, startEnd, supabase]);
+  }, [startEndToday, supabase]);
 
   // ---------- Realtime ----------
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -139,7 +103,7 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchReservations();
     const ch = supabase
-      .channel("reservations-dashboard")
+      .channel("reservations-today")
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "reservations" },
@@ -178,10 +142,6 @@ export default function DashboardPage() {
     [supabase, scheduleRefetch]
   );
 
-  useEffect(() => {
-    fetchReservations();
-  }, [filter, fetchReservations]);
-
   // ---------- helpers ----------
   const parseTableNo = (name?: string | null) => {
     if (!name) return null;
@@ -207,7 +167,6 @@ export default function DashboardPage() {
 
   // ---------- เลือก/ย้ายโต๊ะ ----------
   const findTableIdByNo = async (no: number) => {
-    // เราตั้งชื่อโต๊ะเป็น "โต๊ะ X" ชัดเจน จึงใช้ eq ได้เลย
     const { data, error } = await supabase
       .from("tables")
       .select("id, table_name")
@@ -218,18 +177,14 @@ export default function DashboardPage() {
     return data.id as string;
   };
 
-  // แทนที่ฟังก์ชันเดิมทั้งก้อนนี้
   const handleAssignTable = async (reservationId: string, tableNo: number) => {
     const tableId = await findTableIdByNo(tableNo);
-
     const { error } = await supabase
       .from("reservations")
-      .update({ table_id: tableId, status: "seated" }) // 👈 อัปเดตสถานะด้วย
+      .update({ table_id: tableId, status: "seated" })
       .eq("id", reservationId);
-
     if (error) throw error;
 
-    // อัปเดตแถวในโมดัลทันที (optimistic) เพื่อให้เห็น "ย้ายโต๊ะ" ได้เลย
     setDetailRow((prev) =>
       prev && prev.id === reservationId
         ? {
@@ -240,7 +195,6 @@ export default function DashboardPage() {
           }
         : prev
     );
-
     scheduleRefetch();
   };
 
@@ -268,7 +222,6 @@ export default function DashboardPage() {
       setDetailRow(r);
       setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
 
-      // โหลดโต๊ะที่ "จับอยู่แล้ว" ในช่วงเวลา ±2 ชม. ของคิวนี้ (ไม่นับตัวเอง)
       if (!r.reservation_datetime) {
         setOccupied([]);
         return;
@@ -358,41 +311,25 @@ export default function DashboardPage() {
           <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
             <div className="p-6">
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-                Queue-Management
+                Today-Queue-Management
               </div>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
-                ตรวจสอบคิวและจัดการคิว
+                คิววันนี้
               </h1>
               <p className="mt-1 text-sm text-gray-600">
-                ตรวจสอบคิวและจัดการคิวทั้งหมดได้ที่นี่
+                ยืนยันและแก้ไขคิววันนี้
               </p>
             </div>
           </div>
         </section>
 
-        {/* ตารางคิว + ตัวกรอง */}
         <section className="bg-white rounded-2xl shadow-xl border">
-          {/* Filter bar */}
           <div className="p-4 flex flex-wrap items-center gap-2 border-b">
-            {FILTERS.map((f) => (
-              <button
-                key={f.key}
-                onClick={() => setFilter(f.key)}
-                className={`rounded-xl px-3 py-1.5 text-sm border transition ${
-                  filter === f.key
-                    ? "bg-indigo-600 text-white border-indigo-600"
-                    : "bg-white hover:bg-gray-50 border-gray-200 text-gray-700"
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
             <div className="ml-auto text-sm text-gray-500">
-              แสดง {rows.length} รายการ (ล่าสุด 200 แถว)
+              แสดง {rows.length} รายการ (วันนี้)
             </div>
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -445,7 +382,7 @@ export default function DashboardPage() {
                       colSpan={6}
                       className="px-4 py-10 text-center text-gray-500"
                     >
-                      ไม่พบข้อมูลในตัวกรองนี้ หรือ ยังไม่มีรายการจองคิว
+                      วันนี้ยังไม่มีรายการจองคิว
                     </td>
                   </tr>
                 ) : (
@@ -478,7 +415,6 @@ export default function DashboardPage() {
                           >
                             {r.status ?? "-"}
                           </span>
-                          {/* โชว์หมายเลขโต๊ะปัจจุบันถ้ามี */}
                           {r.tbl?.table_name && (
                             <span className="ml-2 text-xs text-slate-500">
                               ({r.tbl.table_name})

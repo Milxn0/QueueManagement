@@ -84,9 +84,14 @@ export default function UserMenu() {
               <div className="my-2 h-px bg-gray-100" />
 
               {/* รายการเมนู */}
+              {/* รายการเมนู */}
               <div className="flex flex-col gap-1">
-                {profile?.role === "admin" && (
+                {/* --- กลุ่ม Admin / Manager / Staff --- */}
+                {(profile?.role === "admin" ||
+                  profile?.role === "manager" ||
+                  profile?.role === "staff") && (
                   <>
+                    {/* จัดการคิว (admin, manager, staff) */}
                     <Link
                       href="/admin/dashboard"
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
@@ -94,29 +99,51 @@ export default function UserMenu() {
                     >
                       จัดการคิว
                     </Link>
-                    <Link
-                      href="/admin/analytics"
-                      className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                      onClick={() => setOpen(false)}
-                    >
-                      สถิติการจอง
-                    </Link>
+
+                    {/* ประวัติการจองคิวทั้งหมด (admin, manager, staff) */}
                     <Link
                       href="/admin/manage-queue"
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
                       onClick={() => setOpen(false)}
                     >
-                      ประวัติการจองคิว
+                      ประวัติการจองคิวทั้งหมด
                     </Link>
-                    <Link
-                      href="/admin/manage-users"
-                      className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
-                      onClick={() => setOpen(false)}
-                    >
-                      จัดผู้ใช้
-                    </Link>
+
+                    {/* สถิติการจอง (admin, manager) */}
+                    {(profile?.role === "admin" ||
+                      profile?.role === "manager") && (
+                      <Link
+                        href="/admin/analytics"
+                        className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                        onClick={() => setOpen(false)}
+                      >
+                        สถิติการจอง
+                      </Link>
+                    )}
+
+                    {/* จัดผู้ใช้ (admin) */}
+                    {profile?.role === "admin" && (
+                      <>
+                      <Link
+                        href="/admin/manage-users"
+                        className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                        onClick={() => setOpen(false)}
+                      >
+                        จัดผู้ใช้
+                      </Link>
+                      <Link
+                        href="/admin/settings"
+                        className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
+                        onClick={() => setOpen(false)}
+                      >
+                        ตั้งค่าระบบ
+                      </Link>
+                      </>
+                    )}
                   </>
                 )}
+
+                {/* --- กลุ่ม Customer (และทุก role สามารถมีเมนูส่วนตัวได้ถ้าต้องการ) --- */}
                 {profile?.role === "customer" && (
                   <>
                     <Link
@@ -126,7 +153,6 @@ export default function UserMenu() {
                     >
                       โปรไฟล์
                     </Link>
-
                     <Link
                       href="/user/queue-history"
                       className="px-3 py-2 rounded-lg hover:bg-gray-50 text-sm"
@@ -136,6 +162,8 @@ export default function UserMenu() {
                     </Link>
                   </>
                 )}
+
+                {/* ออกจากระบบ */}
                 <button
                   className="px-3 py-2 rounded-lg hover:bg-gray-50 text-left text-sm text-red-500"
                   onClick={async () => {
