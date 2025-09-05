@@ -1,15 +1,18 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
+import LinesChart from "@/components/admin/LinesChart";
+
+import type { AnalyticsResult } from "@/types/analytics";
+import type { Series as LineSeries } from "@/components/admin/LinesChart";
+
 type Row = {
   id: string;
   reservation_datetime: string;
   status: string | null;
-  // fields used for export (optional in chart)
   partysize?: number | null;
   queue_code?: string | null;
   user?: {
@@ -17,12 +20,6 @@ type Row = {
     phone: string | null;
     email: string | null;
   } | null;
-};
-
-type Series = {
-  name: string;
-  color: string; // HEX
-  values: number[];
 };
 
 type ExportMode = "day" | "month" | "year";
@@ -37,22 +34,6 @@ function ymdLocal(dateISO: string) {
   return `${y}-${m}-${day}`;
 }
 
-function endOfMonthISO(d = new Date()) {
-  return new Date(
-    d.getFullYear(),
-    d.getMonth() + 1,
-    0,
-    23,
-    59,
-    59,
-    999
-  ).toISOString();
-}
-function startOfMonthISO(d = new Date()) {
-  return new Date(d.getFullYear(), d.getMonth(), 1, 0, 0, 0, 0).toISOString();
-}
-
-// ----- helper: range from YYYY-MM -----
 function monthRangeFromYYYYMM(ym: string) {
   const [Y, M] = ym.split("-").map(Number);
   const start = new Date(Y, (M ?? 1) - 1, 1, 0, 0, 0, 0);
@@ -67,10 +48,11 @@ function monthRangeFromYYYYMM(ym: string) {
 
 export default function AnalyticsPage() {
   const supabase = useMemo(() => createClient(), []);
-  const [loading, setLoading] = useState(true);
+  const [analytics, setAnalytics] = useState<AnalyticsResult | null>(null);
+  const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  // ----- chart month selector -----
+  // ----- เดือนของกราฟ -----
   const initialMonth = new Date().toISOString().slice(0, 7); // yyyy-MM
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
   const { startISO, endISO, daysInMonth } = useMemo(
@@ -78,30 +60,42 @@ export default function AnalyticsPage() {
     [selectedMonth]
   );
 
+  // ----- ข้อมูลรายวันสำหรับกราฟเส้น -----
   const [rows, setRows] = useState<Row[]>([]);
 
-  const fetchData = useCallback(async () => {
+  const fetchAnalytics = useCallback(async () => {
     setLoading(true);
-    setErr(null);
+    try {
+      const qs = new URLSearchParams({ start: startISO, end: endISO });
+      const res = await fetch("/api/admin/analytics?" + qs.toString(), {
+        cache: "no-store",
+      });
+      const json: AnalyticsResult = await res.json();
+      setAnalytics(json);
+    } catch (e: any) {
+      setErr(e?.message ?? "โหลดข้อมูลไม่สำเร็จ");
+    } finally {
+      setLoading(false);
+    }
+  }, [startISO, endISO]);
+
+  const fetchRows = useCallback(async () => {
+    // ดึงข้อมูลคิวของเดือนนั้น ๆ เพื่อ aggregate เป็นกราฟเส้นแบบ All/Confirmed/Pending/Cancelled
     const { data, error } = await supabase
       .from("reservations")
       .select("id,reservation_datetime,status")
       .gte("reservation_datetime", startISO)
       .lte("reservation_datetime", endISO)
-      .order("reservation_datetime", { ascending: true });
+      .order("reservation_datetime", { ascending: true })
+      .limit(5000);
 
-    if (error) {
-      setErr(error.message);
-      setRows([]);
-    } else {
-      setRows((data ?? []) as Row[]);
-    }
-    setLoading(false);
+    if (!error) setRows((data ?? []) as Row[]);
   }, [supabase, startISO, endISO]);
 
   useEffect(() => {
-    fetchData();
-  }, [fetchData]);
+    fetchAnalytics();
+    fetchRows();
+  }, [fetchAnalytics, fetchRows]);
 
   // ---------- Export controls ----------
   const today = new Date();
@@ -148,7 +142,6 @@ export default function AnalyticsPage() {
         label: `${mth}`,
       };
     }
-    // year
     const Y = Number(y);
     const start = new Date(Y, 0, 1, 0, 0, 0, 0);
     const end = new Date(Y, 11, 31, 23, 59, 59, 999);
@@ -180,9 +173,9 @@ export default function AnalyticsPage() {
           .from("reservations")
           .select(
             `
-          id, reservation_datetime, status, partysize, queue_code,
-          user:users!reservations_user_id_fkey(name, phone, email)
-        `
+            id, reservation_datetime, status, partysize, queue_code,
+            user:users!reservations_user_id_fkey(name, phone, email)
+          `
           )
           .gte("reservation_datetime", start)
           .lte("reservation_datetime", end)
@@ -245,7 +238,7 @@ export default function AnalyticsPage() {
     [supabase]
   );
 
-  // aggregate to daily series
+  // ----- สร้างซีรีส์สำหรับกราฟเส้นจาก rows -----
   const { series, maxY, totals } = useMemo(() => {
     const pending = new Array(daysInMonth).fill(0);
     const confirmed = new Array(daysInMonth).fill(0);
@@ -276,7 +269,7 @@ export default function AnalyticsPage() {
         { name: "ยืนยันแล้ว", color: "#22c55e", values: confirmed },
         { name: "รอคอนเฟิร์ม", color: "#f59e0b", values: pending },
         { name: "ยกเลิก/ไม่มา", color: "#ef4444", values: cancelled },
-      ] as Series[],
+      ] as LineSeries[],
       maxY: m,
       totals: {
         all: all.reduce((a, b) => a + b, 0),
@@ -288,7 +281,6 @@ export default function AnalyticsPage() {
   }, [rows, daysInMonth]);
 
   return (
-    
     <main className="max-w-6xl mx-auto px-6 py-10">
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
@@ -311,7 +303,7 @@ export default function AnalyticsPage() {
             ส่งออกเป็น Excel (CSV)
           </h2>
           <p className="text-xs text-gray-500 mt-1">
-            เลือกช่วงเวลา แล้วกด “ส่งออก”
+            เลือกระยะเวลา แล้วกด “ส่งออก”
           </p>
         </div>
         <div className="p-4 flex flex-col gap-3 md:flex-row md:items-end">
@@ -402,7 +394,7 @@ export default function AnalyticsPage() {
         />
       </section>
 
-      {/* chart */}
+      {/* charts */}
       <section className="rounded-2xl border bg-white shadow-sm overflow-hidden">
         <div className="px-5 py-4 border-b bg-gray-50 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <h2 className="text-base font-semibold text-gray-800">
@@ -427,11 +419,18 @@ export default function AnalyticsPage() {
               {err}
             </div>
           ) : (
-            <LinesChart
-              days={daysInMonth}
-              series={series}
-              maxY={niceMax(maxY)}
-            />
+            <>
+              <LinesChart
+                days={daysInMonth}
+                series={series}
+                maxY={niceMax(maxY)}
+              />
+              {analytics && (
+                <div className="mt-6">
+                  
+                </div>
+              )}
+            </>
           )}
         </div>
       </section>
@@ -463,194 +462,4 @@ function niceMax(maxY: number) {
   const pow = Math.pow(10, Math.floor(Math.log10(maxY)));
   const unit = pow / 2;
   return Math.ceil(maxY / unit) * unit;
-}
-
-function LinesChart({
-  days,
-  series,
-  maxY,
-}: {
-  days: number;
-  series: Series[];
-  maxY: number;
-}) {
-  const [hover, setHover] = useState<number | null>(null);
-
-  const W = 920;
-  const H = 300;
-  const pad = { l: 44, r: 16, t: 16, b: 28 };
-  const iw = W - pad.l - pad.r;
-  const ih = H - pad.t - pad.b;
-
-  const x = (i: number) => pad.l + (iw * i) / (days - 1 || 1);
-  const y = (v: number) => pad.t + ih - (ih * v) / (maxY || 1);
-
-  const ticksX = useMemo(() => {
-    const arr = [
-      1,
-      Math.ceil(days / 4),
-      Math.ceil(days / 2),
-      Math.ceil((3 * days) / 4),
-      days,
-    ];
-    return Array.from(new Set(arr)).filter((n) => n >= 1 && n <= days);
-  }, [days]);
-
-  const ticksY = useMemo(() => {
-    const step = Math.max(1, Math.ceil(maxY / 5));
-    const out: number[] = [];
-    for (let v = 0; v <= maxY; v += step) out.push(v);
-    if (out[out.length - 1] !== maxY) out.push(maxY);
-    return out;
-  }, [maxY]);
-
-  const toPath = (vals: number[]) => {
-    return vals
-      .map((v, i) => `${i === 0 ? "M" : "L"} ${x(i)} ${y(v)}`)
-      .join(" ");
-  };
-
-  const handleMove = (e: React.MouseEvent<SVGRectElement, MouseEvent>) => {
-    const rect = (e.target as SVGRectElement).getBoundingClientRect();
-    const px = e.clientX - rect.left - pad.l;
-    const i = Math.round((px / (iw || 1)) * (days - 1));
-    if (i >= 0 && i < days) setHover(i);
-  };
-
-  const handleLeave = () => setHover(null);
-
-  return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} className="w-full min-w-[720px]">
-        {/* axes */}
-        {/* X grid */}
-        {ticksX.map((d) => (
-          <line
-            key={`gx-${d}`}
-            x1={x(d - 1)}
-            x2={x(d - 1)}
-            y1={pad.t}
-            y2={pad.t + ih}
-            stroke="#e5e7eb"
-            strokeDasharray="4 4"
-          />
-        ))}
-        {/* Y grid + labels */}
-        {ticksY.map((v) => (
-          <g key={`gy-${v}`}>
-            <line
-              x1={pad.l}
-              x2={pad.l + iw}
-              y1={y(v)}
-              y2={y(v)}
-              stroke="#e5e7eb"
-            />
-            <text
-              x={pad.l - 8}
-              y={y(v)}
-              textAnchor="end"
-              dominantBaseline="middle"
-              fontSize="11"
-              fill="#6b7280"
-            >
-              {v}
-            </text>
-          </g>
-        ))}
-        {/* X labels */}
-        {ticksX.map((d) => (
-          <text
-            key={`xl-${d}`}
-            x={x(d - 1)}
-            y={pad.t + ih + 18}
-            textAnchor="middle"
-            fontSize="11"
-            fill="#6b7280"
-          >
-            {d}
-          </text>
-        ))}
-
-        {/* lines */}
-        {series.map((s) => (
-          <path
-            key={s.name}
-            d={toPath(s.values)}
-            fill="none"
-            stroke={s.color}
-            strokeWidth={2.5}
-          />
-        ))}
-
-        {/* markers on hover */}
-        {hover !== null && (
-          <>
-            <line
-              x1={x(hover)}
-              x2={x(hover)}
-              y1={pad.t}
-              y2={pad.t + ih}
-              stroke="#94a3b8"
-              strokeDasharray="4 4"
-            />
-            {series.map((s, i) => (
-              <circle
-                key={`dot-${i}`}
-                cx={x(hover)}
-                cy={y(s.values[hover] ?? 0)}
-                r={3.5}
-                fill="#fff"
-                stroke={s.color}
-                strokeWidth={2}
-              />
-            ))}
-          </>
-        )}
-
-        {/* capture area */}
-        <rect
-          x={pad.l}
-          y={pad.t}
-          width={iw}
-          height={ih}
-          fill="transparent"
-          onMouseMove={handleMove}
-          onMouseLeave={handleLeave}
-        />
-      </svg>
-
-      {/* legend + tooltip */}
-      <div className="mt-3 flex flex-wrap items-center gap-4">
-        {series.map((s) => (
-          <div key={s.name} className="flex items-center gap-2 text-sm">
-            <span
-              className="inline-block h-2.5 w-2.5 rounded-sm"
-              style={{ backgroundColor: s.color }}
-            />
-            <span className="text-gray-700">{s.name}</span>
-          </div>
-        ))}
-
-        {hover !== null && (
-          <div className="ml-auto rounded-xl border bg-white px-3 py-2 text-xs shadow-sm">
-            <div className="font-semibold text-gray-800">
-              วันที่ {hover + 1}
-            </div>
-            {series.map((s) => (
-              <div key={`tt-${s.name}`} className="flex items-center gap-2">
-                <span
-                  className="inline-block h-2.5 w-2.5 rounded-sm"
-                  style={{ backgroundColor: s.color }}
-                />
-                <span className="text-gray-700">{s.name}</span>
-                <span className="ml-2 font-medium text-gray-900">
-                  {s.values[hover] ?? 0}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
 }

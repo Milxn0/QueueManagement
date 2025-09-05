@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
@@ -7,6 +8,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/ReservationDetailModal";
 import type { OccupiedItem } from "@/components/ReservationDetailModal";
+import TodayQueueTable from "@/components/admin/TodayQueueTable";
+
 type ReservationRow = {
   id: string;
   user_id: string | null;
@@ -69,27 +72,13 @@ export default function TodayQueuePage() {
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
-    const { startOfDayISO, endOfDayISO } = startEndToday();
-
-    const { data, error } = await supabase
-      .from("reservations")
-      .select(
-        `
-        id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
-        user:users!reservations_user_id_fkey(name, phone, email),
-        cancelled_at, cancelled_reason,
-        cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
-        tbl:tables!reservations_table_id_fkey(table_name)
-      `
-      )
-      .gte("reservation_datetime", startOfDayISO)
-      .lte("reservation_datetime", endOfDayISO)
-      .order("reservation_datetime", { ascending: false })
-      .limit(200);
-
-    setRows(error ? [] : ((data ?? []) as ReservationRow[]));
+    const res = await fetch("/api/admin/reservations/today", {
+      cache: "no-store",
+    });
+    const data = await res.json();
+    setRows(data);
     setRowsLoading(false);
-  }, [startEndToday, supabase]);
+  }, []);
 
   // ---------- Realtime ----------
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -129,17 +118,10 @@ export default function TodayQueuePage() {
 
   const confirmReservation = useCallback(
     async (id: string) => {
-      const { error } = await supabase
-        .from("reservations")
-        .update({ status: "confirmed" })
-        .eq("id", id);
-      if (error) {
-        console.error("Update status failed:", error);
-        return;
-      }
+      await fetch(`/api/admin/reservations/${id}/confirm`, { method: "PATCH" });
       scheduleRefetch();
     },
-    [supabase, scheduleRefetch]
+    [scheduleRefetch]
   );
 
   // ---------- helpers ----------
@@ -154,15 +136,6 @@ export default function TodayQueuePage() {
     return Number.isNaN(d.getTime())
       ? "-"
       : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-  };
-  const statusClass = (s: string | null) => {
-    const v = (s ?? "").toLowerCase();
-    if (v.includes("cancel")) return "bg-red-100 text-red-700";
-    if (v === "pending") return "bg-yellow-100 text-yellow-700";
-    if (v === "confirm" || v === "confirmed")
-      return "bg-indigo-100 text-indigo-700";
-    if (v === "seated") return "bg-emerald-100 text-emerald-700";
-    return "bg-gray-100 text-gray-700";
   };
 
   // ---------- เลือก/ย้ายโต๊ะ ----------
@@ -217,49 +190,32 @@ export default function TodayQueuePage() {
   const [occupied, setOccupied] = useState<OccupiedItem[]>([]);
   const [currentTableNo, setCurrentTableNo] = useState<number | null>(null);
 
-  const openDetail = useCallback(
-    async (r: ReservationRow) => {
-      setDetailRow(r);
-      setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
+  const openDetail = useCallback(async (r: ReservationRow) => {
+    setDetailRow(r);
+    setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
 
-      if (!r.reservation_datetime) {
-        setOccupied([]);
-        return;
-      }
-      const base = new Date(r.reservation_datetime).getTime();
-      const start = new Date(base - TWO_HOURS_MS).toISOString();
-      const end = new Date(base + TWO_HOURS_MS).toISOString();
+    const params = new URLSearchParams({ dt: r.reservation_datetime ?? "" });
+    const res = await fetch(
+      `/api/admin/reservations/${r.id}/occupied?` + params.toString()
+    );
+    const list = await res.json();
 
-      const { data, error } = await supabase
-        .from("reservations")
-        .select(
-          `id, queue_code, reservation_datetime, tbl:tables!reservations_table_id_fkey(table_name)`
-        )
-        .not("table_id", "is", null)
-        .neq("id", r.id)
-        .gte("reservation_datetime", start)
-        .lte("reservation_datetime", end);
+    const occ = (list ?? [])
+      .map(
+        (o: {
+          tbl?: { table_name?: string | null };
+          reservation_datetime?: string;
+          queue_code?: string;
+        }) => ({
+          tableNo: parseTableNo(o.tbl?.table_name ?? null) ?? 0,
+          start: o.reservation_datetime,
+          code: o.queue_code,
+        })
+      )
+      .filter((o: { tableNo: number }) => o.tableNo > 0);
 
-      if (error) {
-        console.error(error);
-        setOccupied([]);
-        return;
-      }
-
-      const occ: OccupiedItem[] =
-        (data ?? [])
-          .map((x: any) => ({
-            tableNo: parseTableNo(x?.tbl?.table_name ?? null) ?? -1,
-            reservationId: x.id as string,
-            queue_code: x.queue_code as string | null,
-            reservation_datetime: x.reservation_datetime as string,
-          }))
-          .filter((o: { tableNo: number }) => o.tableNo > 0) || [];
-
-      setOccupied(occ);
-    },
-    [supabase]
-  );
+    setOccupied(occ);
+  }, []);
 
   // ---------- UI ----------
   if (loading) {
@@ -330,111 +286,25 @@ export default function TodayQueuePage() {
             </div>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left bg-gray-50 border-b">
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    คิว/โค้ด
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    ผู้จอง
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    วันที่-เวลา
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    จำนวนที่นั่ง
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    สถานะ
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700"></th>
+          <div className="overflow-x-auto ">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50 text-gray-600">
+                <tr>
+                  <th className="px-4 py-3 text-left">คิว</th>
+                  <th className="px-4 py-3 text-left">วัน-เวลา</th>
+                  <th className="px-4 py-3 text-left">ลูกค้า</th>
+                  <th className="px-4 py-3 text-left">จำนวน</th>
+                  <th className="px-4 py-3 text-left">สถานะ</th>
+                  <th className="px-4 py-3 text-left">การจัดการ</th>
                 </tr>
               </thead>
-              <tbody>
-                {rowsLoading ? (
-                  [...Array(6)].map((_, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-24 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-40 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-16 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-5 w-20 bg-gray-200 animate-pulse rounded-full" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-36 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                    </tr>
-                  ))
-                ) : rows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-10 text-center text-gray-500"
-                    >
-                      วันนี้ยังไม่มีรายการจองคิว
-                    </td>
-                  </tr>
-                ) : (
-                  rows.map((r) => {
-                    const size =
-                      typeof r.partysize === "string"
-                        ? r.partysize
-                        : typeof r.partysize === "number"
-                        ? r.partysize.toString()
-                        : "-";
-                    return (
-                      <tr key={r.id} className="border-b hover:bg-gray-50/60">
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          {r.queue_code ?? "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {r.user?.name
-                            ? (r.user?.name as string).slice(0, 8)
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {formatDate(r.reservation_datetime)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{size}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass(
-                              r.status
-                            )}`}
-                          >
-                            {r.status ?? "-"}
-                          </span>
-                          {r.tbl?.table_name && (
-                            <span className="ml-2 text-xs text-slate-500">
-                              ({r.tbl.table_name})
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => openDetail(r)}
-                            className="inline-flex items-center rounded-xl bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-900"
-                          >
-                            ดูรายละเอียด
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
+
+              <TodayQueueTable
+                rows={rows}
+                onOpenDetail={openDetail}
+                onConfirm={confirmReservation}
+                rowsLoading={rowsLoading}
+              />
             </table>
           </div>
         </section>

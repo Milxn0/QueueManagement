@@ -1,0 +1,28 @@
+export type AnalyticsRange = {
+  startISO: string;
+  endISO: string;
+};
+
+export type AnalyticsTotals = {
+  overall: number;
+  pending: number;
+  confirmed: number;
+  seated: number;
+  cancelled: number;
+};
+
+export type DailyCount = {
+
+  date: string;
+  count: number;
+};
+
+export type HeatmapMatrix = number[][];
+
+
+export type AnalyticsResult = {
+  range: AnalyticsRange;
+  totals: AnalyticsTotals;
+  byDay: DailyCount[];
+  heatmap: HeatmapMatrix;
+};

@@ -40,25 +40,11 @@ export default function ManageUsersPage() {
   const [addOpen, setAddOpen] = useState(false);
   // ---------------- data ----------------
   const fetchUsers = useCallback(async () => {
-    const { data, error } = await supabase
-      .from("users")
-      .select("id,name,email,phone,role,created_at");
-
-    if (error) {
-      setError(error.message);
-      setLoading(false);
-      return;
-    }
-
-    // admin ไว้บนสุด
-    const weight = (u: AppUser) => (u.role === "admin" ? 0 : 1);
-    const sorted = (data ?? [])
-      .slice()
-      .sort((a: AppUser, b: AppUser) => weight(a) - weight(b));
-
-    setUsers(sorted);
+    const res = await fetch("/api/admin/users", { cache: "no-store" });
+    const data = await res.json();
+    setUsers(data);
     setLoading(false);
-  }, [supabase]);
+  }, []);
 
   // ---------------- derived ----------------
   const filteredUsers = users.filter((u) => {

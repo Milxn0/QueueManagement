@@ -8,6 +8,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/ReservationDetailModal";
 import type { OccupiedItem } from "@/components/ReservationDetailModal";
+import ManageQueueTable from "@/components/admin/ManageQueueTable";
 type FilterKey = "all" | "month" | "year" | "cancelled";
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "คิวทั้งหมด" },
@@ -62,10 +63,10 @@ export default function ManageQueuesPage() {
   const startEnd = useCallback(() => {
     const now = new Date();
     const y = now.getFullYear();
-    const m = now.getMonth();
     const startOfYear = new Date(y, 0, 1, 0, 0, 0, 0);
+    const endOfYear = new Date(y, 11, 31, 23, 59, 59, 999);
     const iso = (d: Date) => d.toISOString();
-    return { startOfYearISO: iso(startOfYear) };
+    return { startOfYearISO: iso(startOfYear), endOfYearISO: iso(endOfYear) };
   }, []);
 
   // เดือนที่เลือก (yyyy-MM)
@@ -90,45 +91,38 @@ export default function ManageQueuesPage() {
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
-    const { startOfYearISO } = startEnd();
 
-    let q = supabase
-      .from("reservations")
-      .select(
-        `
-        id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
-        user:users!reservations_user_id_fkey(name, phone, email),
-        cancelled_at, cancelled_reason,
-        cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
-        tbl:tables!reservations_table_id_fkey(table_name)
-      `
-      )
-      .order("reservation_datetime", { ascending: false })
-      .limit(200);
+    // คำนวณช่วงเวลา/เงื่อนไขตาม filter
+    let start = "";
+    let end = "";
+    const { startOfYearISO, endOfYearISO } = startEnd();
 
-    switch (filter) {
-      case "month": {
-        const { startISO, endISO } = monthRange(selectedMonth);
-        q = q
-          .gte("reservation_datetime", startISO)
-          .lte("reservation_datetime", endISO);
-        break;
-      }
-      case "year":
-        q = q.gte("reservation_datetime", startOfYearISO);
-        break;
-      case "cancelled":
-        q = q.ilike("status", "%cancel%");
-        break;
-      case "all":
-      default:
-        break;
+    if (filter === "month") {
+      const { startISO, endISO } = monthRange(selectedMonth);
+      start = startISO;
+      end = endISO;
+    } else if (
+      filter === "year" ||
+      filter === "all" ||
+      filter === "cancelled"
+    ) {
+      start = startOfYearISO;
+      end = endOfYearISO;
     }
 
-    const { data, error } = await q;
-    setRows(error ? [] : ((data ?? []) as ReservationRow[]));
+    const qs = new URLSearchParams();
+    if (start) qs.set("start", start);
+    if (end) qs.set("end", end);
+    if (filter === "cancelled") qs.set("status", "cancelled");
+
+    const res = await fetch(`/api/admin/reservations?` + qs.toString(), {
+      cache: "no-store",
+    });
+    const data = await res.json();
+
+    setRows(data);
     setRowsLoading(false);
-  }, [filter, monthRange, selectedMonth, startEnd, supabase]);
+  }, [filter, selectedMonth, startEnd, monthRange]);
 
   // Derived rows after client-side search
   const displayRows = useMemo(() => {
@@ -186,17 +180,10 @@ export default function ManageQueuesPage() {
   }, [filter, selectedMonth, fetchReservations]);
   const confirmReservation = useCallback(
     async (id: string) => {
-      const { error } = await supabase
-        .from("reservations")
-        .update({ status: "confirmed" })
-        .eq("id", id);
-      if (error) {
-        console.error("Update status failed:", error);
-        return;
-      }
+      await fetch(`/api/admin/reservations/${id}/confirm`, { method: "PATCH" });
       scheduleRefetch();
     },
-    [supabase, scheduleRefetch]
+    [scheduleRefetch]
   );
 
   // ---------- small helpers ----------
@@ -274,49 +261,32 @@ export default function ManageQueuesPage() {
   const [occupied, setOccupied] = useState<OccupiedItem[]>([]);
   const [currentTableNo, setCurrentTableNo] = useState<number | null>(null);
 
-  const openDetail = useCallback(
-    async (r: ReservationRow) => {
-      setDetailRow(r);
-      setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
+  const openDetail = useCallback(async (r: ReservationRow) => {
+    setDetailRow(r);
+    setCurrentTableNo(parseTableNo(r.tbl?.table_name ?? null));
 
-      if (!r.reservation_datetime) {
-        setOccupied([]);
-        return;
-      }
-      const base = new Date(r.reservation_datetime).getTime();
-      const start = new Date(base - TWO_HOURS_MS).toISOString();
-      const end = new Date(base + TWO_HOURS_MS).toISOString();
+    const params = new URLSearchParams({ dt: r.reservation_datetime ?? "" });
+    const res = await fetch(
+      `/api/admin/reservations/${r.id}/occupied?` + params.toString()
+    );
+    const list = await res.json();
 
-      const { data, error } = await supabase
-        .from("reservations")
-        .select(
-          `id, queue_code, reservation_datetime, tbl:tables!reservations_table_id_fkey(table_name)`
-        )
-        .not("table_id", "is", null)
-        .neq("id", r.id)
-        .gte("reservation_datetime", start)
-        .lte("reservation_datetime", end);
+    const occ = (list ?? [])
+      .map(
+        (o: {
+          tbl?: { table_name?: string | null };
+          reservation_datetime?: string;
+          queue_code?: string;
+        }) => ({
+          tableNo: parseTableNo(o.tbl?.table_name ?? null) ?? 0,
+          start: o.reservation_datetime,
+          code: o.queue_code,
+        })
+      )
+      .filter((o: { tableNo: number }) => o.tableNo > 0);
 
-      if (error) {
-        console.error(error);
-        setOccupied([]);
-        return;
-      }
-
-      const occ: OccupiedItem[] =
-        (data ?? [])
-          .map((x: any) => ({
-            tableNo: parseTableNo(x?.tbl?.table_name ?? null) ?? -1,
-            reservationId: x.id as string,
-            queue_code: x.queue_code as string | null,
-            reservation_datetime: x.reservation_datetime as string,
-          }))
-          .filter((o: { tableNo: number }) => o.tableNo > 0) || [];
-
-      setOccupied(occ);
-    },
-    [supabase]
-  );
+    setOccupied(occ);
+  }, []);
 
   // ---------- UI ----------
   if (loading) {
@@ -381,7 +351,6 @@ export default function ManageQueuesPage() {
         </section>
 
         <section className="bg-white rounded-2xl shadow-xl border">
-          {/* Filter + Search */}
           <div className="p-4 flex flex-wrap items-center gap-2 border-b">
             {FILTERS.map((f) => (
               <button
@@ -412,7 +381,6 @@ export default function ManageQueuesPage() {
               </div>
             )}
 
-            {/* Search box */}
             <div className="ml-auto flex items-center gap-2">
               <input
                 value={search}
@@ -426,113 +394,14 @@ export default function ManageQueuesPage() {
             </div>
           </div>
 
-          {/* Table */}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left bg-gray-50 border-b">
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    คิว/โค้ด
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    ผู้จอง
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    วันที่-เวลา
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    จำนวนที่นั่ง
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700">
-                    สถานะ
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-gray-700"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {rowsLoading ? (
-                  [...Array(6)].map((_, i) => (
-                    <tr key={i} className="border-b">
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-24 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-40 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-16 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-5 w-20 bg-gray-200 animate-pulse rounded-full" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-36 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="h-4 w-28 bg-gray-200 animate-pulse rounded" />
-                      </td>
-                    </tr>
-                  ))
-                ) : displayRows.length === 0 ? (
-                  <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-10 text-center text-gray-500"
-                    >
-                      ไม่พบข้อมูลตามเงื่อนไข/คำค้นหา
-                    </td>
-                  </tr>
-                ) : (
-                  displayRows.map((r) => {
-                    const size =
-                      typeof r.partysize === "string"
-                        ? r.partysize
-                        : typeof r.partysize === "number"
-                        ? r.partysize.toString()
-                        : "-";
-                    return (
-                      <tr key={r.id} className="border-b hover:bg-gray-50/60">
-                        <td className="px-4 py-3 font-medium text-gray-800">
-                          {r.queue_code ?? "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {r.user?.name
-                            ? (r.user?.name as string).slice(0, 24)
-                            : "-"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">
-                          {formatDate(r.reservation_datetime)}
-                        </td>
-                        <td className="px-4 py-3 text-gray-700">{size}</td>
-                        <td className="px-4 py-3">
-                          <span
-                            className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass(
-                              r.status
-                            )}`}
-                          >
-                            {r.status ?? "-"}
-                          </span>
-                          {r.tbl?.table_name && (
-                            <span className="ml-2 text-xs text-slate-500">
-                              ({r.tbl.table_name})
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <button
-                            type="button"
-                            onClick={() => openDetail(r)}
-                            className="inline-flex items-center rounded-xl bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-900"
-                          >
-                            ดูรายละเอียด
-                          </button>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
+            <ManageQueueTable
+              displayRows={displayRows}
+              rowsLoading={rowsLoading}
+              openDetail={(r) => {
+                void openDetail(r as ReservationRow);
+              }}
+            />
           </div>
         </section>
 
