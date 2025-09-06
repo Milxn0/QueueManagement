@@ -34,50 +34,41 @@ export default function ReservationPage() {
 
   // ----------auth + autofill profile (email/name/phone) ----------
   useEffect(() => {
-    let mounted = true;
+    let cancelled = false;
 
-    const loadUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      if (!mounted) return;
+    (async () => {
+      try {
+        const res = await fetch("/api/user/profile/autofill", {
+          cache: "no-store",
+        });
+        if (cancelled) return;
 
-      const user = data.user;
-      setIsLoggedIn(!!user);
+        if (!res.ok) return;
 
-      // เติมอีเมลจาก auth (อ่านอย่างเดียว ไม่ให้แก้)
-      if (user?.email) setEmail(user.email);
+        const text = await res.text();
+        if (!text) return; // กันเคสเนื้อหาว่าง/204
 
-      // ดึงจากตาราง users เพื่อ autofill
-      if (user?.id) {
-        const { data: prof, error: pErr } = await supabase
-          .from("users")
-          .select("name, phone")
-          .eq("id", user.id)
-          .single();
-
-        if (!pErr && prof) {
-          if (prof.name && !fullName) setFullName(prof.name);
-          if (prof.phone && !phone) setPhone(prof.phone);
+        let p: {
+          name?: string | null;
+          phone?: string | null;
+          email?: string | null;
+        } = {};
+        try {
+          p = JSON.parse(text);
+        } catch {
+          return;
         }
+
+
+      } catch {
+
       }
-
-      setLoading(false);
-    };
-
-    loadUser();
-
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_event: any, session: { user: { email: SetStateAction<string> } }) => {
-        setIsLoggedIn(!!session?.user);
-        if (session?.user?.email) setEmail(session.user.email);
-      }
-    );
+    })();
 
     return () => {
-      mounted = false;
-      sub.subscription.unsubscribe();
+      cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [supabase]);
+  }, []);
 
   // ตรวจสถานะ login ซ้ำ
   useEffect(() => {

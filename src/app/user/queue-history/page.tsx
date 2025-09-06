@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -5,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
+import HistoryTable from "@/components/user/HistoryTable";
 
 type Reservation = {
   users: any;
@@ -88,38 +90,18 @@ export default function UserReservationHistoryPage() {
 
   // ---------- data load ----------
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      setError(null);
-      // 1) get current user
-      const { data: userData, error: userErr } = await supabase.auth.getUser();
-      if (userErr || !userData?.user) {
-        // ถ้าไม่พบผู้ใช้ -> ส่งไปหน้า login (ปรับ path ตามระบบคุณ)
-        router.push("/auth/login");
-        return;
-      }
-      setMe({ id: userData.user.id });
-
-      // 2) fetch my reservations only
-      const { data, error: qErr } = await supabase
-        .from("reservations")
-        .select(
-          "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users!reservations_user_id_fkey(name, phone)"
-        )
-
-        .eq("user_id", userData.user.id)
-        .order("reservation_datetime", { ascending: false });
-
-      if (qErr) {
-        setError(qErr.message);
-      } else {
-        setRows((data ?? []) as Reservation[]);
-      }
-
-      setLoading(false);
-    })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  let mounted = true;
+  (async () => {
+    const res = await fetch("/api/user/reservations", { cache: "no-store" });
+    if (!mounted) return;
+    const data = await res.json();
+    setRows(data);
+    setLoading(false);
+  })();
+  return () => {
+    mounted = false;
+  };
+}, []);
 
   async function refetch() {
     if (!me?.id) return;
@@ -243,81 +225,7 @@ export default function UserReservationHistoryPage() {
 
       {!loading && rows.length > 0 && (
         <div className="overflow-x-auto rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
-          <table className="min-w-full text-sm">
-            <thead className="bg-white">
-              <tr className="text-left text-indigo-600">
-                <th className="px-4 py-3">รหัสคิว</th>
-                <th className="px-4 py-3">ชื่อผู้จอง</th>
-                <th className="px-4 py-3">เบอร์โทรศัพท์</th>
-                <th className="px-4 py-3">วันเวลา</th>
-                <th className="px-4 py-3">จำนวนคน</th>
-                <th className="px-4 py-3">สถานะ</th>
-                <th className="px-4 py-3 text-right">การจัดการ</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white">
-              {rows.map((r) => (
-                <tr
-                  key={r.id}
-                  className="border-t border-gray-100 dark:border-gray-800"
-                >
-                  <td className="px-4 py-3 font-medium">
-                    {r.queue_code ?? "-"}
-                  </td>
-                  <td className="px-4 py-3">{r.users?.name ?? "-"}</td>
-                  <td className="px-4 py-3">{r.users?.phone ?? "-"}</td>
-                  <td className="px-4 py-3">
-                    {formatBangkok(r.reservation_datetime)}
-                  </td>
-                  <td className="px-4 py-3">{r.partysize}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-                        r.status === "pending"
-                          ? "bg-yellow-100 text-yellow-800"
-                          : r.status === "confirmed"
-                          ? "bg-blue-100 text-blue-800"
-                          : r.status === "cancelled"
-                          ? "bg-red-100 text-red-800 line-through"
-                          : "bg-gray-100 text-gray-800",
-                      ].join(" ")}
-                    >
-                      {r.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex justify-end gap-2">
-                      <button
-                        className="rounded-xl border px-3 py-1.5 text-sm hover:bg-indigo-50  disabled:opacity-50"
-                        disabled={!canModify(r.status)}
-                        onClick={() => openEditModal(r)}
-                        title={
-                          canModify(r.status)
-                            ? "แก้ไขการจอง"
-                            : "ไม่สามารถแก้ไขสถานะนี้ได้"
-                        }
-                      >
-                        แก้ไข
-                      </button>
-                      <button
-                        className="rounded-xl border px-3 py-1.5 text-sm hover:bg-red-50 border-red-300 text-red-700 disabled:opacity-50"
-                        disabled={!canModify(r.status)}
-                        onClick={() => cancelReservation(r)}
-                        title={
-                          canModify(r.status)
-                            ? "ยกเลิกการจอง"
-                            : "ไม่สามารถยกเลิกสถานะนี้ได้"
-                        }
-                      >
-                        ยกเลิก
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <HistoryTable rows={rows} />
         </div>
       )}
 
