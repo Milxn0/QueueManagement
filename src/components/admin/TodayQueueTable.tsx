@@ -2,18 +2,8 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 import React from "react";
-import type { OccupiedItem } from "@/components/ReservationDetailModal";
 import { statusClass, statusLabel } from "@/utils/status";
 
-type ReservationRow = {
-  id: string;
-  reservation_datetime: string | null;
-  queue_code: string | null;
-  status: string | null;
-  partysize: number | string | null;
-  user?: { name?: string | null; phone?: string | null; email?: string | null };
-  tbl?: { table_name?: string | null };
-};
 // ---- local helpers ----
 const formatDate = (value: string | null) => {
   if (!value) return "-";

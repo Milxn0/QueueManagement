@@ -17,7 +17,7 @@ export async function assignTable(reservationId: string, tableNo: number) {
   const tableId = await findTableIdByNo(tableNo);
   const { error } = await supabase
     .from("reservations")
-    .update({ table_id: tableId })
+    .update({ table_id: tableId, status: "seated"})
     .eq("id", reservationId);
   if (error) throw error;
 }
@@ -26,7 +26,7 @@ export async function moveTable(reservationId: string, toNo: number) {
   const tableId = await findTableIdByNo(toNo);
   const { error } = await supabase
     .from("reservations")
-    .update({ table_id: tableId })
+    .update({ table_id: tableId, status: "seated" })
     .eq("id", reservationId);
   if (error) throw error;
 }

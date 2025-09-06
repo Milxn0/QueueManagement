@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import CardMenu from "@/components/CardMenu";
+import CardMenu from "@/components/ui/CardMenu";
 
 interface MenuItem {
   id: string;

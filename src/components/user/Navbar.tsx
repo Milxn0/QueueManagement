@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/hooks/useAuth";
-import UserMenu from "@/components/UserMenu";
+import UserMenu from "@/components/user/UserMenu";
 
 export default function Navbar() {
   const pathname = usePathname();

@@ -3,18 +3,13 @@
 
 import { useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faUserPlus, faTriangleExclamation, faCircleCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
-
-export type Role = "admin" | "staff" | "customer";
-
-export type AppUser = {
-  id: string;
-  name: string | null;
-  email: string | null;
-  phone: string | null;
-  role: Role;
-  created_at?: string | null;
-};
+import {
+  faUserPlus,
+  faTriangleExclamation,
+  faCircleCheck,
+  faXmark,
+} from "@fortawesome/free-solid-svg-icons";
+import { AppUser, Role } from "@/types/appuser";
 
 export default function AddUserModal({
   open,
@@ -47,7 +42,7 @@ export default function AddUserModal({
     if (!form.name.trim()) return false;
     if (!form.password || form.password.length < 6) return false;
     const email = form.email.trim();
-    if (!email) return false; 
+    if (!email) return false;
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     return true;
   }, [form]);
@@ -99,9 +94,17 @@ export default function AddUserModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center" role="dialog" aria-modal="true">
+    <div
+      className="fixed inset-0 z-[70] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+    >
       {/* Backdrop */}
-      <button aria-label="close-backdrop" className="absolute inset-0 bg-black/30 backdrop-blur-sm" onClick={handleClose} />
+      <button
+        aria-label="close-backdrop"
+        className="absolute inset-0 bg-black/30 backdrop-blur-sm"
+        onClick={handleClose}
+      />
 
       {/* Dialog */}
       <div className="relative w-full max-w-lg overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
@@ -113,8 +116,13 @@ export default function AddUserModal({
                 <FontAwesomeIcon icon={faUserPlus} />
                 เพิ่มผู้ใช้ใหม่
               </div>
-              <h3 className="mt-2 text-lg font-semibold text-gray-900">กรอกข้อมูลผู้ใช้</h3>
-              <p className="mt-1 text-xs text-gray-600">กรุณากรอกข้อมูลให้ถูกต้อง โดยระบบจะเพิ่ม <code>users</code> ใน Auth ให้โดยอัตโนมัติ</p>
+              <h3 className="mt-2 text-lg font-semibold text-gray-900">
+                กรอกข้อมูลผู้ใช้
+              </h3>
+              <p className="mt-1 text-xs text-gray-600">
+                กรุณากรอกข้อมูลให้ถูกต้อง โดยระบบจะเพิ่ม <code>users</code> ใน
+                Auth ให้โดยอัตโนมัติ
+              </p>
             </div>
             <button
               onClick={handleClose}
@@ -131,7 +139,10 @@ export default function AddUserModal({
           <div className="px-6 pt-4">
             {err && (
               <div className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
-                <FontAwesomeIcon icon={faTriangleExclamation} className="mt-0.5" />
+                <FontAwesomeIcon
+                  icon={faTriangleExclamation}
+                  className="mt-0.5"
+                />
                 <span>{err}</span>
               </div>
             )}
@@ -148,30 +159,42 @@ export default function AddUserModal({
         <div className="px-6 py-4">
           <div className="grid grid-cols-1 gap-3">
             <div>
-              <label className="text-xs text-gray-600">ชื่อ <span className="text-rose-600">*</span></label>
+              <label className="text-xs text-gray-600">
+                ชื่อ <span className="text-rose-600">*</span>
+              </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                 value={form.name}
-                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, name: e.target.value }))
+                }
                 placeholder="ชื่อ-นามสกุล"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">อีเมล <span className="text-rose-600">*</span></label>
+              <label className="text-xs text-gray-600">
+                อีเมล <span className="text-rose-600">*</span>
+              </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                 value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, email: e.target.value }))
+                }
                 placeholder="name@example.com"
                 type="email"
               />
             </div>
             <div>
-              <label className="text-xs text-gray-600">เบอร์โทร (ไม่บังคับ)</label>
+              <label className="text-xs text-gray-600">
+                เบอร์โทร (ไม่บังคับ)
+              </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                 value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, phone: e.target.value }))
+                }
                 placeholder="08x-xxx-xxxx"
               />
             </div>
@@ -181,7 +204,9 @@ export default function AddUserModal({
                 <select
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={form.role}
-                  onChange={(e) => setForm((f) => ({ ...f, role: e.target.value as Role }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, role: e.target.value as Role }))
+                  }
                 >
                   <option value="admin">Admin</option>
                   <option value="manager">Manager</option>
@@ -190,11 +215,15 @@ export default function AddUserModal({
                 </select>
               </div>
               <div className="flex-1">
-                <label className="text-xs text-gray-600">รหัสผ่านเริ่มต้น <span className="text-rose-600">*</span></label>
+                <label className="text-xs text-gray-600">
+                  รหัสผ่านเริ่มต้น <span className="text-rose-600">*</span>
+                </label>
                 <input
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, password: e.target.value }))
+                  }
                   placeholder="อย่างน้อย 6 ตัวอักษร"
                   type="password"
                 />

@@ -3,71 +3,52 @@
 import { useEffect, useMemo, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faCircleCheck, faXmark } from "@fortawesome/free-solid-svg-icons";
-
-type ReservationForDetail = {
-  id: string;
-  queue_code: string | null;
-  reservation_datetime: string | null;
-  partysize: number | string | null;
-  status: string | null;
-  user?: { name: string | null } | null;
-  cancelled_by?: { name: string | null; role?: string | null } | null;
-  cancelled_reason?: string | null;
-};
-
-export type OccupiedItem = {
-  tableNo: number;
-  reservationId: string;
-  queue_code: string | null;
-  reservation_datetime: string;
-};
-
-type Props = {
-  open: boolean;
-  row: ReservationForDetail | null;
-  onClose: () => void;
-
-  // actions
-  onConfirm: (id: string) => Promise<void> | void;
-  onCancel: (id: string, reason: string) => Promise<void> | void;
-
-  // เลือก/ย้ายโต๊ะ
-  currentTableNo: number | null;
-  occupied: OccupiedItem[];
-  onAssignTable: (
-    reservationId: string,
-    tableNo: number
-  ) => Promise<void> | void;
-  onMoveTable: (
-    reservationId: string,
-    fromNo: number,
-    toNo: number
-  ) => Promise<void> | void;
-
-  readOnly?: boolean;
-};
+import type { OccupiedItem, Props } from "@/types/reservationdetail";
 
 const TH_TZ = "Asia/Bangkok";
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
+/* ---------- Helpers ---------- */
+
+// parse date string from DB safely (supports "YYYY-MM-DD HH:mm:ss")
+const parseDate = (value: string | null) => {
+  if (!value) return null;
+  const raw = String(value).trim();
+  if (!raw) return null;
+
+  let d = new Date(raw);
+  if (!Number.isNaN(d.getTime())) return d;
+
+  const withT = raw.replace(" ", "T");
+  d = new Date(withT);
+  if (!Number.isNaN(d.getTime())) return d;
+
+  const withTZ = withT.endsWith("Z") ? withT : withT + "Z";
+  d = new Date(withTZ);
+  return Number.isNaN(d.getTime()) ? null : d;
+};
+
 const formatDate = (value: string | null) => {
-  if (!value) return "-";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime())
-    ? "-"
-    : d.toLocaleString("th-TH", {
+  const d = parseDate(value);
+  return d
+    ? d.toLocaleString("th-TH", {
         dateStyle: "medium",
         timeStyle: "short",
         timeZone: TH_TZ,
-      });
+      })
+    : "-";
 };
 
-const formatTime = (iso: string) =>
-  new Date(iso).toLocaleTimeString("th-TH", {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: TH_TZ,
-  });
+const formatTime = (value: string) => {
+  const d = parseDate(value);
+  return d
+    ? d.toLocaleTimeString("th-TH", {
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: TH_TZ,
+      })
+    : "-";
+};
 
 const statusClass = (s: string | null) => {
   const v = (s ?? "").toLowerCase();
@@ -82,6 +63,19 @@ const statusClass = (s: string | null) => {
   return "bg-gray-100 text-gray-700 ring-1 ring-gray-200";
 };
 
+// show queue code or a shortened reservationId
+const showOccCode = (o?: {
+  queue_code?: string | null;
+  reservationId?: string | null;
+}) => {
+  const q = (o?.queue_code ?? "").trim();
+  if (q) return q;
+  const rid = (o?.reservationId ?? "").trim();
+  return rid ? rid.slice(0, 6) : "-";
+};
+
+/* ---------- Component ---------- */
+
 export default function ReservationDetailModal({
   open,
   row,
@@ -93,9 +87,9 @@ export default function ReservationDetailModal({
   onAssignTable,
   onMoveTable,
   readOnly = false,
+  fromManageQueue = false,
 }: Props) {
-  
-  // ---------- Hooks ต้องอยู่ก่อนเสมอ ----------
+  // ---------- Hooks ----------
   const [localStatus, setLocalStatus] = useState<string>(
     (row?.status ?? "").toLowerCase()
   );
@@ -106,12 +100,12 @@ export default function ReservationDetailModal({
   const status = localStatus;
   const [busy, setBusy] = useState(false);
 
-  // ยกเลิกพร้อมเหตุผล
+  // cancel with reason
   const [cancelStep, setCancelStep] = useState<0 | 1>(0);
   const [reason, setReason] = useState("");
   const minReasonLen = 3;
 
-  // เลือก/ย้ายโต๊ะ
+  // table picking
   const [tableStep, setTableStep] = useState<0 | 1>(0);
   const tables = useMemo(() => Array.from({ length: 17 }, (_, i) => i + 1), []);
   const occByTable = useMemo(() => {
@@ -143,13 +137,16 @@ export default function ReservationDetailModal({
   const conflictMessage = (targetTable: number): string | null => {
     const occ = occByTable.get(targetTable);
     if (!occ || !row.reservation_datetime) return null;
-    const a = new Date(row.reservation_datetime).getTime();
-    const b = new Date(occ.reservation_datetime).getTime();
-    const diff = Math.abs(a - b);
+
+    const a = parseDate(row.reservation_datetime);
+    const b = parseDate(occ.reservation_datetime);
+    if (!a || !b) return null;
+
+    const diff = Math.abs(a.getTime() - b.getTime());
     if (diff < TWO_HOURS_MS) {
-      return `โต๊ะ ${targetTable} ถูกใช้ใกล้เวลา (คิว ${
-        occ.queue_code ?? occ.reservationId.slice(0, 6)
-      } เวลา ${formatTime(
+      return `โต๊ะ ${targetTable} ถูกใช้ใกล้เวลา (คิว ${showOccCode(
+        occ
+      )} เวลา ${formatTime(
         occ.reservation_datetime
       )}) — ต้องห่างอย่างน้อย 2 ชั่วโมง`;
     }
@@ -250,13 +247,14 @@ export default function ReservationDetailModal({
               </span>
               {currentTableNo != null && (
                 <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                  โต๊ะปัจจุบัน: {currentTableNo}
+                  {fromManageQueue ? "โต๊ะที่นั่ง" : "โต๊ะปัจจุบัน"}:{" "}
+                  {currentTableNo}
                 </span>
               )}
             </div>
           </div>
 
-          {/* ถ้ายกเลิกแล้ว แสดงรายละเอียด */}
+          {/* Cancel info */}
           {status.includes("cancel") && (
             <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50/60 px-4 py-3">
               <div className="text-xs text-rose-700">ข้อมูลการยกเลิก</div>
@@ -278,7 +276,7 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Step: เลือกโต๊ะ (ซ่อนทั้งหมดเมื่อ readOnly) */}
+          {/* Step: pick table */}
           {!readOnly && tableStep === 1 && (
             <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
               <div className="mb-2 flex items-center justify-between">
@@ -290,7 +288,7 @@ export default function ReservationDetailModal({
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {tables.map((no) => {
                   const occ = occByTable.get(no);
                   const conflict = conflictMessage(no) !== null;
@@ -314,22 +312,23 @@ export default function ReservationDetailModal({
                         conflict
                           ? conflictMessage(no) ?? ""
                           : occ
-                          ? `มีคิว ${
-                              occ.queue_code ?? occ.reservationId.slice(0, 6)
-                            } เวลา ${formatTime(occ.reservation_datetime)}`
+                          ? `มีคิว ${showOccCode(occ)} เวลา ${formatTime(
+                              occ.reservation_datetime
+                            )}`
                           : "ว่าง"
                       }
                     >
                       <div className="text-sm font-semibold">โต๊ะ {no}</div>
                       <div className="text-[11px]">
                         {isCurrent
-                          ? "โต๊ะปัจจุบัน"
+                          ? fromManageQueue
+                            ? "โต๊ะที่นั่ง"
+                            : "โต๊ะปัจจุบัน"
                           : occ
-                          ? ` ${
-                              occ.queue_code ?? occ.reservationId.slice(0, 6)
-                            }`
+                          ? ` ${showOccCode(occ)}`
                           : "ว่าง"}
                       </div>
+
                       {occ && (
                         <div className="text-[11px] text-slate-500">
                           {formatTime(occ.reservation_datetime)}
@@ -352,7 +351,7 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Actions (ซ่อนทั้งหมดเมื่อ readOnly) */}
+          {/* Actions */}
           {!readOnly && tableStep === 0 && (
             <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
               {status === "pending" && (
@@ -426,7 +425,7 @@ export default function ReservationDetailModal({
             </div>
           )}
 
-          {/* Step 2: ฟอร์มเหตุผลการยกเลิก (ซ่อนเมื่อ readOnly) */}
+          {/* Cancel reason form */}
           {!readOnly && cancelStep === 1 && tableStep === 0 && (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-white p-4 ring-1 ring-rose-100">
               <div className="mb-2 flex items-center justify-between">

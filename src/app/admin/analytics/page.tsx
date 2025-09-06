@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -12,7 +13,7 @@ import {
 } from "@/utils/date";
 import SummaryCard from "@/components/admin/SummaryCard";
 import type { AnalyticsResult } from "@/types/analytics";
-import type { Series as LineSeries } from "@/components/admin/LinesChart";
+import type { Series, LineSeries } from "@/types/chart";
 import type { Row } from "@/types/analytics";
 
 type ExportMode = "day" | "month" | "year";

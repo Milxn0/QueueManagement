@@ -14,8 +14,8 @@ import {
   faEye,
 } from "@fortawesome/free-solid-svg-icons";
 import { faUserPlus } from "@fortawesome/free-solid-svg-icons";
-import AddUserModal from "@/components/AddUserModal";
-import UserDetailModal, { AppUser, Role } from "@/components/UserDetailModal";
+import AddUserModal from "@/components/admin/AddUserModal";
+import UserDetailModal, { AppUser, Role } from "@/components/admin/UserDetailModal";
 export default function ManageUsersPage() {
   const supabase = useMemo(() => createClient(), []);
 

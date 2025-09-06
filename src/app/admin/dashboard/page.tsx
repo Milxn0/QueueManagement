@@ -6,15 +6,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-import ReservationDetailModal from "@/components/ReservationDetailModal";
-import type { OccupiedItem } from "@/components/ReservationDetailModal";
+import ReservationDetailModal from "@/components/admin/ReservationDetailModal";
 import TodayQueueTable from "@/components/admin/TodayQueueTable";
 import { parseTableNo } from "@/utils/tables";
 import { toISO as iso, formatDateTh as formatDate } from "@/utils/date";
 import { assignTable, moveTable } from "@/lib/reservations";
 import type { ReservationRow } from "@/types/reservationrow";
-
-
+import { OccupiedItem } from "@/types/reservationdetail";
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
@@ -130,23 +128,29 @@ export default function TodayQueuePage() {
 
     const params = new URLSearchParams({ dt: r.reservation_datetime ?? "" });
     const res = await fetch(
-      `/api/admin/reservations/${r.id}/occupied?` + params.toString()
+      `/api/admin/reservations/${r.id}/occupied?${params.toString()}`
     );
+
     const list = await res.json();
 
-    const occ = (list ?? [])
+    const occ: OccupiedItem[] = (list ?? [])
       .map(
         (o: {
-          tbl?: { table_name?: string | null };
-          reservation_datetime?: string;
-          queue_code?: string;
+          id?: string;
+          tbl?: { table_name?: string | null } | null;
+          reservation_datetime?: string | null;
+          queue_code?: string | null;
         }) => ({
           tableNo: parseTableNo(o.tbl?.table_name ?? null) ?? 0,
-          start: o.reservation_datetime,
-          code: o.queue_code,
+          reservationId: o.id ?? "", // ใช้ตัดเป็น 6 ตัวในโมดัล
+          reservation_datetime: o.reservation_datetime ?? "",
+          queue_code: o.queue_code ?? null,
         })
       )
-      .filter((o: { tableNo: number }) => o.tableNo > 0);
+      .filter(
+        (o: { tableNo: number; reservation_datetime: any }) =>
+          o.tableNo > 0 && !!o.reservation_datetime
+      );
 
     setOccupied(occ);
   }, []);

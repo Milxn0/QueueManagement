@@ -1,12 +1,7 @@
 "use client";
 
+import { Series } from "@/types/chart";
 import React, { useMemo, useState } from "react";
-
-export type Series = {
-  name: string;
-  color: string;
-  values: number[];
-};
 
 export default function LinesChart({
   days,

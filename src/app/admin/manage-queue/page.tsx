@@ -6,8 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabaseClient";
-import ReservationDetailModal from "@/components/ReservationDetailModal";
-import type { OccupiedItem } from "@/components/ReservationDetailModal";
+import ReservationDetailModal from "@/components/admin/ReservationDetailModal";
 import ManageQueueTable from "@/components/admin/ManageQueueTable";
 import { parseTableNo } from "@/utils/tables";
 import { statusClass } from "@/utils/status";
@@ -15,6 +14,7 @@ import { assignTable, moveTable } from "@/lib/reservations";
 import type { ReservationRow } from "@/types/reservationrow";
 import type { FilterKey } from "@/types/filters";
 import { FILTERS } from "@/utils/filters";
+import { OccupiedItem } from "@/types/reservationdetail";
 
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -356,6 +356,7 @@ export default function ManageQueuesPage() {
           onMoveTable={handleMoveTable}
           occupied={occupied}
           readOnly
+          fromManageQueue
         />
       </main>
     </div>
