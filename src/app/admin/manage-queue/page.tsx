@@ -12,34 +12,10 @@ import ManageQueueTable from "@/components/admin/ManageQueueTable";
 import { parseTableNo } from "@/utils/tables";
 import { statusClass } from "@/utils/status";
 import { assignTable, moveTable } from "@/lib/reservations";
+import type { ReservationRow } from "@/types/reservationrow";
+import type { FilterKey } from "@/types/filters";
+import { FILTERS } from "@/utils/filters";
 
-type FilterKey = "all" | "month" | "year" | "cancelled";
-const FILTERS: { key: FilterKey; label: string }[] = [
-  { key: "all", label: "คิวทั้งหมด" },
-  { key: "month", label: "คิวแบบเลือกเดือน" },
-  { key: "year", label: "คิวปีนี้" },
-  { key: "cancelled", label: "คิวที่ยกเลิก" },
-];
-
-type ReservationRow = {
-  id: string;
-  user_id: string | null;
-  reservation_datetime: string | null;
-  partysize: number | string | null;
-  queue_code: string | null;
-  status: string | null;
-  created_at: string | null;
-  table_id: string | null;
-  user?: {
-    name: string | null;
-    phone: string | null;
-    email: string | null;
-  } | null;
-  cancelled_at?: string | null;
-  cancelled_reason?: string | null;
-  cancelled_by?: { name: string | null; role?: string | null } | null;
-  tbl?: { table_name: string | null } | null;
-};
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
@@ -135,9 +111,9 @@ export default function ManageQueuesPage() {
     return rows.filter((r) => {
       const values = [
         r.queue_code,
-        r.user?.name,
-        r.user?.phone,
-        r.user?.email,
+        r.users?.name,
+        r.users?.phone,
+        r.users?.email,
         r.status,
       ].map(norm);
       return values.some((v) => v.includes(term));

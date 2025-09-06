@@ -7,7 +7,7 @@ import Link from "next/link";
 import Toast from "@/components/ui/Toast";
 import { useAuth } from "@/hooks/useAuth";
 import { useSettings } from "@/hooks/useSettings";
-import { Step } from "@/types/reservation";
+import type { Step } from "@/types/reservation";
 import { pad, toInputValue, localInputToISO } from "@/utils/date";
 import { validateReservationTime } from "@/utils/reservation";
 import { createOTP, verifyOTP } from "@/lib/otp";

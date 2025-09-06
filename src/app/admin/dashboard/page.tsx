@@ -12,26 +12,9 @@ import TodayQueueTable from "@/components/admin/TodayQueueTable";
 import { parseTableNo } from "@/utils/tables";
 import { toISO as iso, formatDateTh as formatDate } from "@/utils/date";
 import { assignTable, moveTable } from "@/lib/reservations";
+import type { ReservationRow } from "@/types/reservationrow";
 
-type ReservationRow = {
-  id: string;
-  user_id: string | null;
-  reservation_datetime: string | null;
-  partysize: number | string | null;
-  queue_code: string | null;
-  status: string | null;
-  created_at: string | null;
-  table_id: string | null;
-  user?: {
-    name: string | null;
-    phone: string | null;
-    email: string | null;
-  } | null;
-  cancelled_at?: string | null;
-  cancelled_reason?: string | null;
-  cancelled_by?: { name: string | null; role?: string | null } | null;
-  tbl?: { table_name: string | null } | null;
-};
+
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 

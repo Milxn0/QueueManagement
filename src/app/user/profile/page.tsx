@@ -4,13 +4,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
-
-type UserRow = {
-  id: string;
-  email: string | null;
-  name: string | null;
-  phone: string | null;
-};
+import type { UserRow } from "@/types/userrow";
 
 export default function ProfilePage() {
   const supabase = createClient();

@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
@@ -10,18 +9,8 @@ import HistoryTable from "@/components/user/HistoryTable";
 import { toLocalInputValue, localInputToISO, formatBangkok, pad } from "@/utils/date";
 import { canModify } from "@/utils/reservation";
 import { updateReservationByUser, cancelReservationByUser } from "@/lib/reservations";
+import type { Reservation } from "@/types/reservation";
 
-type Reservation = {
-  users: any;
-  id: string;
-  user_id: string;
-  reservation_datetime: string;
-  partysize: number | string;
-  queue_code: string | null;
-  status: "pending" | "confirmed" | "seated" | "served" | "cancelled" | string;
-  created_at: string;
-  table_id: string | null;
-};
 
 export default function UserReservationHistoryPage() {
   const supabase = createClient();
