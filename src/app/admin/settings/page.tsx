@@ -8,11 +8,11 @@ import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 
 type AppSettings = {
-  id: number; // จะล็อกเป็น 1 แถว (id=1)
+  id: number;
   is_system_open: boolean;
-  open_time: string; // 'HH:mm'
-  close_time: string; // 'HH:mm'
-  days_ahead: number; // จองล่วงหน้าได้กี่วัน
+  open_time: string; 
+  close_time: string; 
+  days_ahead: number; 
   store_name: string | null;
   store_image_url: string | null;
   contact_phone: string | null;
@@ -62,7 +62,7 @@ export default function SettingsPage() {
         return;
       }
 
-      // โหลด settings (แถวเดียว id=1)
+      // โหลด settings 
       const { data, error } = await supabase
         .from("app_settings")
         .select("*")
@@ -101,7 +101,7 @@ export default function SettingsPage() {
     setErr(null);
     setOk(null);
     try {
-      // บังคับให้มี id=1 เสมอ (singleton)
+      // บังคับให้มี id=1 เสมอ
       const payload = { ...settings, id: 1 };
       const { error } = await supabase.from("app_settings").upsert(payload, {
         onConflict: "id",

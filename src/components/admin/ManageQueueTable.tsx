@@ -1,4 +1,3 @@
-// src/components/admin/ManageQueueTable.tsx
 "use client";
 import React from "react";
 import { statusClass, statusLabel } from "@/utils/status";

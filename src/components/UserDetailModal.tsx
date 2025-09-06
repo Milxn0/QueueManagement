@@ -55,8 +55,8 @@ export default function UserDetailModal({
   user: AppUser | null;
   currentUid: string | null;
   onClose: () => void;
-  onUpdated?: () => void; // ให้หน้าพ่อ refetch หลังบันทึก
-  onDeleted?: () => void; // ให้หน้าพ่อ refetch หลังลบ
+  onUpdated?: () => void;
+  onDeleted?: () => void;
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [busy, setBusy] = useState(false);
@@ -102,7 +102,6 @@ export default function UserDetailModal({
       setMsg("คัดลอก User ID แล้ว");
       setTimeout(() => setMsg(null), 1600);
     } catch {
-      /* ignore */
     }
   };
 
@@ -134,7 +133,7 @@ export default function UserDetailModal({
     try {
       const payload: Partial<AppUser> = { ...form };
       if (isSelf) {
-        // เจ้าของบัญชีแก้ของตัวเอง → client เขียนตรงได้
+        // เจ้าของบัญชีแก้ของตัวเอง
         const { error } = await supabase
           .from("users")
           .update(payload)
@@ -158,7 +157,7 @@ export default function UserDetailModal({
     }
   };
 
-  // เปลี่ยนรหัสผ่าน: self → updateUser; admin → เรียก API (ต้องมี SERVICE_ROLE)
+  // เปลี่ยนรหัสผ่าน
   const changePassword = async () => {
     setErr(null);
     setMsg(null);

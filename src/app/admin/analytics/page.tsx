@@ -1,11 +1,16 @@
-/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import LinesChart from "@/components/admin/LinesChart";
-
+import {
+  monthRangeFromYYYYMM,
+  makeRangeISO,
+  formatBangkok,
+  ymdLocal,
+} from "@/utils/date";
+import SummaryCard from "@/components/admin/SummaryCard";
 import type { AnalyticsResult } from "@/types/analytics";
 import type { Series as LineSeries } from "@/components/admin/LinesChart";
 
@@ -23,28 +28,6 @@ type Row = {
 };
 
 type ExportMode = "day" | "month" | "year";
-
-const TZ = "Asia/Bangkok";
-
-function ymdLocal(dateISO: string) {
-  const d = new Date(dateISO);
-  const y = d.toLocaleString("en-CA", { timeZone: TZ, year: "numeric" });
-  const m = d.toLocaleString("en-CA", { timeZone: TZ, month: "2-digit" });
-  const day = d.toLocaleString("en-CA", { timeZone: TZ, day: "2-digit" });
-  return `${y}-${m}-${day}`;
-}
-
-function monthRangeFromYYYYMM(ym: string) {
-  const [Y, M] = ym.split("-").map(Number);
-  const start = new Date(Y, (M ?? 1) - 1, 1, 0, 0, 0, 0);
-  const end = new Date(Y, M ?? 1, 0, 23, 59, 59, 999);
-  const days = new Date(Y, M ?? 1, 0).getDate();
-  return {
-    startISO: start.toISOString(),
-    endISO: end.toISOString(),
-    daysInMonth: days,
-  };
-}
 
 export default function AnalyticsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -99,8 +82,8 @@ export default function AnalyticsPage() {
 
   // ---------- Export controls ----------
   const today = new Date();
-  const defaultDay = today.toISOString().slice(0, 10); // yyyy-MM-dd
-  const defaultMonth = defaultDay.slice(0, 7); // yyyy-MM
+  const defaultDay = today.toISOString().slice(0, 10); 
+  const defaultMonth = defaultDay.slice(0, 7);
   const defaultYear = String(today.getFullYear());
 
   const [mode, setMode] = useState<ExportMode>("day");
@@ -108,55 +91,6 @@ export default function AnalyticsPage() {
   const [monthVal, setMonthVal] = useState<string>(defaultMonth);
   const [yearVal, setYearVal] = useState<string>(defaultYear);
   const [exporting, setExporting] = useState(false);
-
-  function makeRangeISO(m: ExportMode, d: string, mth: string, y: string) {
-    if (m === "day") {
-      const [Y, M, D] = d.split("-").map(Number);
-      const start = new Date(Y, (M ?? 1) - 1, D ?? 1, 0, 0, 0, 0);
-      const end = new Date(Y, (M ?? 1) - 1, D ?? 1, 23, 59, 59, 999);
-      return { start: start.toISOString(), end: end.toISOString(), label: d };
-    }
-    if (m === "month") {
-      const [Y, M] = mth.split("-").map(Number);
-      const start = new Date(
-        Y ?? today.getFullYear(),
-        (M ?? 1) - 1,
-        1,
-        0,
-        0,
-        0,
-        0
-      );
-      const end = new Date(
-        Y ?? today.getFullYear(),
-        M ?? 1,
-        0,
-        23,
-        59,
-        59,
-        999
-      );
-      return {
-        start: start.toISOString(),
-        end: end.toISOString(),
-        label: `${mth}`,
-      };
-    }
-    const Y = Number(y);
-    const start = new Date(Y, 0, 1, 0, 0, 0, 0);
-    const end = new Date(Y, 11, 31, 23, 59, 59, 999);
-    return { start: start.toISOString(), end: end.toISOString(), label: y };
-  }
-
-  const formatBangkok = (iso: string) =>
-    new Date(iso).toLocaleString("th-TH", {
-      timeZone: TZ,
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
 
   const csvEscape = (val: unknown) => {
     const s = val == null ? "" : String(val);
@@ -425,11 +359,7 @@ export default function AnalyticsPage() {
                 series={series}
                 maxY={niceMax(maxY)}
               />
-              {analytics && (
-                <div className="mt-6">
-                  
-                </div>
-              )}
+              {analytics && <div className="mt-6"></div>}
             </>
           )}
         </div>
@@ -439,23 +369,6 @@ export default function AnalyticsPage() {
 }
 
 /* ---------- Components ---------- */
-
-function SummaryCard({
-  label,
-  value,
-  className,
-}: {
-  label: string;
-  value: number;
-  className?: string;
-}) {
-  return (
-    <div className={`rounded-2xl p-6 shadow-sm ${className ?? ""}`}>
-      <div className="text-3xl font-bold">{value}</div>
-      <div className="mt-1 text-sm font-medium">{label}</div>
-    </div>
-  );
-}
 
 function niceMax(maxY: number) {
   if (maxY <= 10) return 10;

@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/server/controllers/usersController.ts
 "use server";
 import "server-only";
 import { createServiceClient } from "@/lib/supabaseService";
@@ -35,7 +34,6 @@ export async function getAutofillProfile(
     .maybeSingle();
 
   if (error) {
-    // อย่าโยน error ตรงๆ เพื่อไม่ให้หลุดไปหน้า 500
     console.error("[getAutofillProfile]", error);
     return { name: null, phone: null, email: null };
   }

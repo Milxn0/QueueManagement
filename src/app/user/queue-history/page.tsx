@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import HistoryTable from "@/components/user/HistoryTable";
+import { toLocalInputValue, localInputToISO, formatBangkok, pad } from "@/utils/date";
+import { canModify } from "@/utils/reservation";
+import { updateReservationByUser, cancelReservationByUser } from "@/lib/reservations";
 
 type Reservation = {
   users: any;
@@ -37,71 +40,20 @@ export default function UserReservationHistoryPage() {
   // ---------- helpers ----------
   const tz = "Asia/Bangkok";
 
-  function toLocalInputValue(iso: string) {
-    // convert ISO -> "yyyy-MM-ddTHH:mm" in Bangkok time for <input type="datetime-local">
-    const d = new Date(iso);
-    const pad = (n: number) => String(n).padStart(2, "0");
-    const y = d.toLocaleString("en-CA", { timeZone: tz, year: "numeric" });
-    const m = pad(
-      Number(d.toLocaleString("en-CA", { timeZone: tz, month: "2-digit" }))
-    );
-    const day = pad(
-      Number(d.toLocaleString("en-CA", { timeZone: tz, day: "2-digit" }))
-    );
-    const hh = pad(
-      Number(
-        d.toLocaleString("en-CA", {
-          timeZone: tz,
-          hour: "2-digit",
-          hour12: false,
-        })
-      )
-    );
-    const mm = pad(
-      Number(d.toLocaleString("en-CA", { timeZone: tz, minute: "2-digit" }))
-    );
-    return `${y}-${m}-${day}T${hh}:${mm}`;
-  }
-
-  function localInputToISO(localStr: string) {
-    const [date, time] = localStr.split("T");
-    const [Y, M, D] = date.split("-").map(Number);
-    const [h, i] = time.split(":").map(Number);
-    const utcMs = Date.UTC(Y, (M ?? 1) - 1, D ?? 1, h ?? 0, i ?? 0);
-    const bangkokOffsetMs = 7 * 60 * 60 * 1000;
-    const realUtc = new Date(utcMs - bangkokOffsetMs);
-    return realUtc.toISOString();
-  }
-
-  function formatBangkok(iso: string) {
-    const d = new Date(iso);
-    return d.toLocaleString("th-TH", {
-      timeZone: tz,
-      year: "numeric",
-      month: "short",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  }
-
-  const canModify = (status: Reservation["status"]) =>
-    ["pending", "confirmed"].includes(status);
-
   // ---------- data load ----------
   useEffect(() => {
-  let mounted = true;
-  (async () => {
-    const res = await fetch("/api/user/reservations", { cache: "no-store" });
-    if (!mounted) return;
-    const data = await res.json();
-    setRows(data);
-    setLoading(false);
-  })();
-  return () => {
-    mounted = false;
-  };
-}, []);
+    let mounted = true;
+    (async () => {
+      const res = await fetch("/api/user/reservations", { cache: "no-store" });
+      if (!mounted) return;
+      const data = await res.json();
+      setRows(data);
+      setLoading(false);
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function refetch() {
     if (!me?.id) return;
@@ -129,50 +81,26 @@ export default function UserReservationHistoryPage() {
   }
 
   async function submitEdit() {
-    if (!editing) return;
-    const iso = localInputToISO(editDateTime);
-    const size = Number(editPartySize);
-    if (!Number.isFinite(size) || size <= 0) {
-      alert("จำนวนคนต้องเป็นตัวเลขมากกว่า 0");
-      return;
-    }
-
-    const { error: upErr } = await supabase
-      .from("reservations")
-      .update({
-        reservation_datetime: iso,
-        partysize: size,
-      })
-      .eq("id", editing.id)
-      .eq("user_id", me?.id ?? "")
-      .select()
-      .single();
-
-    if (upErr) {
-      alert("แก้ไขไม่สำเร็จ: " + upErr.message);
-      return;
-    }
-    setEditing(null);
-    await refetch();
+  if (!editing || !me?.id) return;
+  const iso = localInputToISO(editDateTime);
+  const size = Number(editPartySize);
+  if (!Number.isFinite(size) || size <= 0) {
+    alert("จำนวนคนต้องเป็นตัวเลขมากกว่า 0");
+    return;
   }
+  await updateReservationByUser(editing.id, me.id, iso, size);
+  setEditing(null);
+  await refetch();
+}
+
 
   async function cancelReservation(r: Reservation) {
-    if (!confirm(`ยืนยันยกเลิกคิว ${r.queue_code ?? r.id}?`)) return;
+  if (!me?.id) return;
+  if (!confirm("ยืนยันยกเลิกคิวนี้?")) return;
+  await cancelReservationByUser(r.id, me.id);
+  await refetch();
+}
 
-    const { error: upErr } = await supabase
-      .from("reservations")
-      .update({ status: "cancelled" })
-      .eq("id", r.id)
-      .eq("user_id", me?.id ?? "")
-      .select()
-      .single();
-
-    if (upErr) {
-      alert("ยกเลิกไม่สำเร็จ: " + upErr.message);
-      return;
-    }
-    await refetch();
-  }
 
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
 

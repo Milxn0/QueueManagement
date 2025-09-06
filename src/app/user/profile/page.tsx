@@ -10,7 +10,6 @@ type UserRow = {
   email: string | null;
   name: string | null;
   phone: string | null;
-  // role?: string | null; // ถ้าใช้ในระบบคุณอยู่ ให้เปิดบรรทัดนี้ได้
 };
 
 export default function ProfilePage() {
@@ -41,7 +40,6 @@ export default function ProfilePage() {
 
       const uid = authRes.user.id;
 
-      // NOTE: อิงตาราง "users" ที่คุณใช้อยู่ (id, email, name, phone)
       const { data, error } = await supabase
         .from("users")
         .select("id, email, name, phone")
@@ -68,8 +66,7 @@ export default function ProfilePage() {
   }, [name, phone, user]);
 
   const phoneInvalid = useMemo(() => {
-    if (!phone.trim()) return false; // อนุญาตให้ว่าง
-    // ตัวอย่าง validate แบบเบา: ต้องเป็นเลข 9–15 หลัก (รองรับ + นำหน้า)
+    if (!phone.trim()) return false;
     return !/^\+?\d{9,15}$/.test(phone.trim());
   }, [phone]);
 
@@ -85,7 +82,7 @@ export default function ProfilePage() {
     try {
       const payload: Partial<UserRow> = {
         name: name.trim(),
-        phone: phone.trim() || null, // เก็บเป็น null ถ้าลบทิ้ง
+        phone: phone.trim() || null, 
       };
 
       const { data, error } = await supabase

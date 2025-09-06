@@ -95,7 +95,6 @@ export default function ManageUsersPage() {
 
       if (admin) {
         await fetchUsers();
-        // ✅ subscribe แบบมี cleanup ที่ useEffect จะเรียกแน่ ๆ
         ch = supabase
           .channel("users-changes")
           .on(
@@ -113,7 +112,6 @@ export default function ManageUsersPage() {
       mounted = false;
       if (ch) supabase.removeChannel(ch);
     };
-    // 👉 ใส่ fetchUsers เป็น dependency ด้วย เพื่อได้ตัวอัปเดตล่าสุด
   }, [supabase, fetchUsers]);
 
   // ---------------- UI states ----------------
@@ -306,7 +304,6 @@ export default function ManageUsersPage() {
                     {u.id}
                   </td>
                   <td className="px-4 py-3">
-                    {/* ลบปุ่ม Edit/Delete เดิมออก ใช้ปุ่มดูรายละเอียดแทน */}
                     <button
                       onClick={() => {
                         setDetailUser(u);

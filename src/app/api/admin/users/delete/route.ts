@@ -47,7 +47,6 @@ export async function POST(req: Request) {
     // 3) ลบผู้ใช้ในระบบ Auth (GoTrue)
     const { error: authErr } = await admin.auth.admin.deleteUser(id);
     if (authErr) {
-      // ถ้าลบ Auth ไม่ได้ แจ้งกลับ (แถวใน public.users ถูกลบไปแล้ว)
       return NextResponse.json(
         { error: `ลบบัญชีใน Auth ไม่สำเร็จ: ${authErr.message}` },
         { status: 400 }

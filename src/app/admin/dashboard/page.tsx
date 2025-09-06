@@ -9,6 +9,9 @@ import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/ReservationDetailModal";
 import type { OccupiedItem } from "@/components/ReservationDetailModal";
 import TodayQueueTable from "@/components/admin/TodayQueueTable";
+import { parseTableNo } from "@/utils/tables";
+import { toISO as iso, formatDateTh as formatDate } from "@/utils/date";
+import { assignTable, moveTable } from "@/lib/reservations";
 
 type ReservationRow = {
   id: string;
@@ -59,11 +62,6 @@ export default function TodayQueuePage() {
     const m = now.getMonth();
     const startOfDay = new Date(y, m, now.getDate(), 0, 0, 0, 0);
     const endOfDay = new Date(y, m, now.getDate(), 23, 59, 59, 999);
-    const iso = (d: Date) => d.toISOString();
-    return {
-      startOfDayISO: iso(startOfDay),
-      endOfDayISO: iso(endOfDay),
-    };
   }, []);
 
   // ---------- Reservations (วันนี้เท่านั้น) ----------
@@ -124,50 +122,8 @@ export default function TodayQueuePage() {
     [scheduleRefetch]
   );
 
-  // ---------- helpers ----------
-  const parseTableNo = (name?: string | null) => {
-    if (!name) return null;
-    const m = name.match(/\d+/);
-    return m ? parseInt(m[0], 10) : null;
-  };
-  const formatDate = (value: string | null) => {
-    if (!value) return "-";
-    const d = new Date(value);
-    return Number.isNaN(d.getTime())
-      ? "-"
-      : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-  };
-
-  // ---------- เลือก/ย้ายโต๊ะ ----------
-  const findTableIdByNo = async (no: number) => {
-    const { data, error } = await supabase
-      .from("tables")
-      .select("id, table_name")
-      .eq("table_name", `โต๊ะ ${no}`)
-      .limit(1)
-      .single();
-    if (error || !data?.id) throw new Error(`ไม่พบโต๊ะหมายเลข ${no}`);
-    return data.id as string;
-  };
-
   const handleAssignTable = async (reservationId: string, tableNo: number) => {
-    const tableId = await findTableIdByNo(tableNo);
-    const { error } = await supabase
-      .from("reservations")
-      .update({ table_id: tableId, status: "seated" })
-      .eq("id", reservationId);
-    if (error) throw error;
-
-    setDetailRow((prev) =>
-      prev && prev.id === reservationId
-        ? {
-            ...prev,
-            status: "seated",
-            table_id: tableId,
-            tbl: { table_name: `โต๊ะ ${tableNo}` },
-          }
-        : prev
-    );
+    await assignTable(reservationId, tableNo);
     scheduleRefetch();
   };
 
@@ -176,12 +132,7 @@ export default function TodayQueuePage() {
     _fromNo: number,
     toNo: number
   ) => {
-    const tableId = await findTableIdByNo(toNo);
-    const { error } = await supabase
-      .from("reservations")
-      .update({ table_id: tableId })
-      .eq("id", reservationId);
-    if (error) throw error;
+    await moveTable(reservationId, toNo);
     scheduleRefetch();
   };
 

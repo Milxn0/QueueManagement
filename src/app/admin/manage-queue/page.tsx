@@ -9,6 +9,10 @@ import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/ReservationDetailModal";
 import type { OccupiedItem } from "@/components/ReservationDetailModal";
 import ManageQueueTable from "@/components/admin/ManageQueueTable";
+import { parseTableNo } from "@/utils/tables";
+import { statusClass } from "@/utils/status";
+import { assignTable, moveTable } from "@/lib/reservations";
+
 type FilterKey = "all" | "month" | "year" | "cancelled";
 const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "คิวทั้งหมด" },
@@ -186,75 +190,21 @@ export default function ManageQueuesPage() {
     [scheduleRefetch]
   );
 
-  // ---------- small helpers ----------
-  const parseTableNo = (name?: string | null) => {
-    if (!name) return null;
-    const m = name.match(/\d+/);
-    return m ? parseInt(m[0], 10) : null;
-  };
-  const formatDate = (value: string | null) => {
-    if (!value) return "-";
-    const d = new Date(value);
-    return Number.isNaN(d.getTime())
-      ? "-"
-      : d.toLocaleString("th-TH", { dateStyle: "medium", timeStyle: "short" });
-  };
-  const statusClass = (s: string | null) => {
-    const v = (s ?? "").toLowerCase();
-    if (v.includes("cancel")) return "bg-red-100 text-red-700";
-    if (v === "pending") return "bg-yellow-100 text-yellow-700";
-    if (v === "confirm" || v === "confirmed")
-      return "bg-indigo-100 text-indigo-700";
-    if (v === "seated") return "bg-emerald-100 text-emerald-700";
-    return "bg-gray-100 text-gray-700";
-  };
+  const handleAssignTable = useCallback(
+    async (reservationId: string, tableNo: number) => {
+      await assignTable(reservationId, tableNo);
+      scheduleRefetch();
+    },
+    [scheduleRefetch]
+  );
 
-  // ---------- เลือก/ย้ายโต๊ะ ----------
-  const findTableIdByNo = async (no: number) => {
-    const { data, error } = await supabase
-      .from("tables")
-      .select("id, table_name")
-      .eq("table_name", `โต๊ะ ${no}`)
-      .limit(1)
-      .single();
-    if (error || !data?.id) throw new Error(`ไม่พบโต๊ะหมายเลข ${no}`);
-    return data.id as string;
-  };
-
-  const handleAssignTable = async (reservationId: string, tableNo: number) => {
-    const tableId = await findTableIdByNo(tableNo);
-    const { error } = await supabase
-      .from("reservations")
-      .update({ table_id: tableId, status: "seated" })
-      .eq("id", reservationId);
-    if (error) throw error;
-
-    setDetailRow((prev) =>
-      prev && prev.id === reservationId
-        ? {
-            ...prev,
-            status: "seated",
-            table_id: tableId,
-            tbl: { table_name: `โต๊ะ ${tableNo}` },
-          }
-        : prev
-    );
-    scheduleRefetch();
-  };
-
-  const handleMoveTable = async (
-    reservationId: string,
-    _fromNo: number,
-    toNo: number
-  ) => {
-    const tableId = await findTableIdByNo(toNo);
-    const { error } = await supabase
-      .from("reservations")
-      .update({ table_id: tableId })
-      .eq("id", reservationId);
-    if (error) throw error;
-    scheduleRefetch();
-  };
+  const handleMoveTable = useCallback(
+    async (reservationId: string, _fromNo: number, toNo: number) => {
+      await moveTable(reservationId, toNo);
+      scheduleRefetch();
+    },
+    [scheduleRefetch]
+  );
 
   // ---------- Modal state ----------
   const [detailRow, setDetailRow] = useState<ReservationRow | null>(null);

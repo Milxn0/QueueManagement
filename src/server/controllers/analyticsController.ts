@@ -1,13 +1,12 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/server/controllers/analyticsController.ts
 "use server";
 import "server-only";
 import { createServiceClient } from "@/lib/supabaseService";
 
 export type AnalyticsRequest = {
-  startISO?: string; // ช่วงเริ่ม (ISO)
-  endISO?: string; // ช่วงจบ (ISO)
+  startISO?: string;
+  endISO?: string;
 };
 
 export type AnalyticsResult = {
@@ -19,11 +18,11 @@ export type AnalyticsResult = {
     seated: number;
     cancelled: number;
   };
-  byDay: Array<{ date: string; count: number }>; // YYYY-MM-DD (Asia/Bangkok)
-  heatmap: number[][]; // 7 x 24  (0=Sun..6=Sat) ตามเวลา Asia/Bangkok
+  byDay: Array<{ date: string; count: number }>;
+  heatmap: number[][];
 };
 
-const TZ_OFFSET_MS = 7 * 60 * 60 * 1000; // Asia/Bangkok (no DST)
+const TZ_OFFSET_MS = 7 * 60 * 60 * 1000;
 
 function toBangkok(d: Date) {
   return new Date(d.getTime() + TZ_OFFSET_MS);
@@ -36,11 +35,10 @@ function ymdBangkok(d: Date) {
   return `${y}-${m}-${day}`;
 }
 function weekdayBangkok(d: Date) {
-  // 0=Sun..6=Sat
   return toBangkok(d).getUTCDay();
 }
 function hourBangkok(d: Date) {
-  return toBangkok(d).getUTCHours(); // 0..23
+  return toBangkok(d).getUTCHours();
 }
 function normStatus(
   s: string | null
@@ -56,7 +54,7 @@ function normStatus(
 function defaultMonthRange(): { startISO: string; endISO: string } {
   const now = new Date();
   const y = now.getUTCFullYear();
-  const m = now.getUTCMonth(); // 0..11
+  const m = now.getUTCMonth();
   const start = new Date(Date.UTC(y, m, 1, 0, 0, 0, 0));
   const end = new Date(Date.UTC(y, m + 1, 0, 23, 59, 59, 999));
   return { startISO: start.toISOString(), endISO: end.toISOString() };
@@ -73,7 +71,6 @@ export async function getAnalytics(
     return defaultMonthRange();
   })();
 
-  // ดึงเฉพาะฟิลด์ที่ต้องใช้
   const { data, error } = await supabase
     .from("reservations")
     .select("id,reservation_datetime,status")
@@ -86,21 +83,17 @@ export async function getAnalytics(
 
   const rows = data ?? [];
 
-  // สรุปรวม
   let pending = 0,
     confirmed = 0,
     seated = 0,
     cancelled = 0,
     other = 0;
-  // แยกตามวัน (Bangkok)
   const byDayMap = new Map<string, number>();
-  // heatmap 7x24
   const heatmap: number[][] = Array.from({ length: 7 }, () =>
     Array.from({ length: 24 }, () => 0)
   );
 
   for (const r of rows) {
-    // datetime
     const iso = (r as any).reservation_datetime as string | null;
     if (!iso) continue;
     const d = new Date(iso);
@@ -108,11 +101,10 @@ export async function getAnalytics(
     const dayStr = ymdBangkok(d);
     byDayMap.set(dayStr, (byDayMap.get(dayStr) ?? 0) + 1);
 
-    const wd = weekdayBangkok(d); // 0..6
-    const hh = hourBangkok(d); // 0..23
+    const wd = weekdayBangkok(d);
+    const hh = hourBangkok(d); 
     heatmap[wd][hh] += 1;
 
-    // สถานะ
     switch (normStatus((r as any).status ?? null)) {
       case "pending":
         pending++;

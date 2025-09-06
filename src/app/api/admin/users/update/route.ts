@@ -1,4 +1,3 @@
-// app/api/admin/users/update/route.ts
 import { NextResponse } from "next/server";
 import {
   createServerAuthedClient,

@@ -19,7 +19,7 @@ export type OccupiedItem = {
   tableNo: number;
   reservationId: string;
   queue_code: string | null;
-  reservation_datetime: string; // ISO
+  reservation_datetime: string;
 };
 
 type Props = {
@@ -27,13 +27,13 @@ type Props = {
   row: ReservationForDetail | null;
   onClose: () => void;
 
-  // actions (ส่งมาจากหน้าพ่อ)
+  // actions
   onConfirm: (id: string) => Promise<void> | void;
   onCancel: (id: string, reason: string) => Promise<void> | void;
 
   // เลือก/ย้ายโต๊ะ
-  currentTableNo: number | null; // โต๊ะปัจจุบันของ row นี้ (ถ้ามี)
-  occupied: OccupiedItem[]; // โต๊ะที่มีคิวอยู่ (เฉพาะยังไม่เกิน 2 ชม.)
+  currentTableNo: number | null;
+  occupied: OccupiedItem[];
   onAssignTable: (
     reservationId: string,
     tableNo: number
@@ -44,7 +44,6 @@ type Props = {
     toNo: number
   ) => Promise<void> | void;
 
-  // 👇 เพิ่ม prop สำหรับโหมดดูอย่างเดียว (ใช้ใน ManageQueuesPage)
   readOnly?: boolean;
 };
 
@@ -93,8 +92,9 @@ export default function ReservationDetailModal({
   occupied,
   onAssignTable,
   onMoveTable,
-  readOnly = false, // 👈 default = false
+  readOnly = false,
 }: Props) {
+  
   // ---------- Hooks ต้องอยู่ก่อนเสมอ ----------
   const [localStatus, setLocalStatus] = useState<string>(
     (row?.status ?? "").toLowerCase()

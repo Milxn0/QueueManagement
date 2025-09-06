@@ -30,7 +30,6 @@ export default function ContactPage() {
       </div>
     );
 
-    // link vs static
     return href ? (
       <Link
         href={href}

@@ -14,6 +14,7 @@ import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabaseClient";
 
 type Profile = {
+  phone: string;
   id: string;
   role: string | null;
   name: string | null;
@@ -36,7 +37,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const firstLoad = useRef(true);
 
-  // one subscription for the whole app
   useEffect(() => {
     let mounted = true;
 
@@ -57,7 +57,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  // load profile once per user
   useEffect(() => {
     let cancelled = false;
     async function load() {

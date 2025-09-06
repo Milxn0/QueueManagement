@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/api/admin/set-password/route.ts
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
@@ -18,20 +17,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "ข้อมูลไม่ถูกต้อง" }, { status: 400 });
     }
 
-    // ✅ FIX: สร้าง Supabase server client ด้วย cookie adapter ที่ถูกต้อง
     const cookieStore = await cookies();
     const supabase = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
       {
         cookies: {
-          // เวอร์ชันที่ยังต้องการ getAll/setAll (ตาม error ที่คุณเจอ)
           getAll() {
             return cookieStore.getAll();
           },
           setAll(cookiesToSet) {
             cookiesToSet.forEach(({ name, value, options }) => {
-              // Next.js cookies().set รองรับอ็อบเจ็กต์ { name, value, ...options }
               cookieStore.set({ name, value, ...options });
             });
           },

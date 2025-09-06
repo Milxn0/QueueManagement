@@ -44,11 +44,10 @@ export default function AddUserModal({
   const [msg, setMsg] = useState<string | null>(null);
 
   const canSubmit = useMemo(() => {
-    // ต้องมี name, email(ถ้าใส่ต้องรูปแบบถูก), password >= 6
     if (!form.name.trim()) return false;
     if (!form.password || form.password.length < 6) return false;
     const email = form.email.trim();
-    if (!email) return false; // ต้องมีอีเมลอย่างน้อยหนึ่งช่องทาง
+    if (!email) return false; 
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false;
     return true;
   }, [form]);
@@ -89,7 +88,6 @@ export default function AddUserModal({
 
       setMsg("สร้างผู้ใช้สำเร็จ");
       onCreated?.(json.data as AppUser);
-      // ปิดโมดัลหลังสำเร็จเล็กน้อย
       setTimeout(() => {
         handleClose();
       }, 500);

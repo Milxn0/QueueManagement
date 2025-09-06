@@ -28,7 +28,6 @@ export default function RegisterPage() {
       const { error } = await supabase.auth.signUp({ email, password });
       if (error) throw error;
 
-      // upsert แถวใน public.users (ถ้าทำได้)
       const { data: u } = await supabase.auth.getUser();
       if (u?.user?.id) {
         await supabase.from("users").upsert({

@@ -1,10 +1,8 @@
-// src/app/api/admin/reservations/route.ts
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
 
-export const dynamic = "force-dynamic"; // กัน cache/stale
+export const dynamic = "force-dynamic";
 
-// GET /api/admin/reservations?start=ISO&end=ISO&status=cancelled
 export async function GET(req: Request) {
   const supabase = createServiceClient();
   const { searchParams } = new URL(req.url);
@@ -13,7 +11,6 @@ export async function GET(req: Request) {
   const end = searchParams.get("end") || undefined;
   const status = searchParams.get("status") || undefined;
 
-  // query หลัก (ฟิลด์ต้องตรงกับ ReservationRow ฝั่ง UI)
   let q = supabase
     .from("reservations")
     .select(
@@ -32,7 +29,6 @@ export async function GET(req: Request) {
   if (end) q = q.lte("reservation_datetime", end);
 
   if (status) {
-    // รองรับทั้ง cancelled/canceled หรือคำที่มี "cancel"
     const s = status.toLowerCase();
     if (s.includes("cancel")) q = q.eq("status", "cancelled");
     else q = q.eq("status", s);

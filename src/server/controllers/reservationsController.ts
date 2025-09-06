@@ -5,8 +5,6 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabaseService";
 
-// src/server/controllers/reservationsController.ts
-// ประเภท (types)
 export type UserReservationRow = {
   id: string;
   reservation_datetime: string | null;
@@ -21,9 +19,7 @@ const PENDING_STATUSES = ["pending"];
 const CONFIRMED_STATUSES = ["confirmed", "seated", "completed"];
 const CANCELLED_STATUSES = ["cancelled", "no_show"];
 
-/**
- * ดึงข้อมูลการจองทั้งหมดของวันนี้
- */
+
 export async function listReservationsToday() {
   const supabase = createServiceClient();
   const start = new Date();
@@ -52,9 +48,7 @@ export async function listReservationsToday() {
   return data ?? [];
 }
 
-/**
- * ยืนยันสถานะการจอง
- */
+
 export async function confirmReservation(id: string) {
   const supabase = createServiceClient();
   const { error } = await supabase
@@ -66,13 +60,11 @@ export async function confirmReservation(id: string) {
     throw error;
   }
   
-  // อัปเดตหน้าเว็บ
+
   revalidatePath("/");
 }
 
-/**
- * ดึงข้อมูลการจองที่โต๊ะถูกจองในช่วงเวลาใกล้เคียง (+- 2 ชั่วโมง)
- */
+
 export async function getOccupiedAround(
   reservationId: string,
   baseISO: string
@@ -99,9 +91,7 @@ export async function getOccupiedAround(
   return data ?? [];
 }
 
-/**
- * ดึงรายการการจองของผู้ใช้ (เรียงล่าสุดไปเก่า)
- */
+
 export async function listReservationsByUser(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -127,9 +117,7 @@ export async function listReservationsByUser(sb: unknown, userId: string) {
   return (data ?? []) as unknown as UserReservationRow[];
 }
 
-/**
- * ตรวจสอบคิวที่ยังไม่จบของผู้ใช้ เพื่อป้องกันการจองซ้ำ
- */
+
 export async function listUserPendingReservations(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -147,10 +135,7 @@ export async function listUserPendingReservations(sb: unknown, userId: string) {
   return data ?? [];
 }
 
-/**
- * ตรวจสอบโควต้าการจองต่อวันของผู้ใช้
- * อนุญาตไม่เกิน `limitPerDay` รายการในสถานะที่ยังไม่นับว่าจบ
- */
+
 export async function checkUserReservationQuota(
   userId: string,
   dayISO: string,

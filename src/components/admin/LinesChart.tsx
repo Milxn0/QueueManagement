@@ -1,11 +1,10 @@
-// src/components/admin/LinesChart.tsx
 "use client";
 
 import React, { useMemo, useState } from "react";
 
 export type Series = {
   name: string;
-  color: string; // HEX
+  color: string;
   values: number[];
 };
 
@@ -159,7 +158,6 @@ export default function LinesChart({
         />
       </svg>
 
-      {/* legend + tooltip */}
       <div className="mt-3 flex flex-wrap items-center gap-4">
         {series.map((s) => (
           <div key={s.name} className="flex items-center gap-2 text-sm">

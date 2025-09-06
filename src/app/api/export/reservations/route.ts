@@ -25,7 +25,6 @@ export async function GET(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const rangeParam = (searchParams.get("range") ?? "today") as "today" | "month";
 
-        // (ทางเลือก) ระบุสถานะที่จะนับเป็น “ลูกค้าที่เข้ามาจริง”
         // default: ไม่นับ cancelled, no_show
         const includeStatusesParam = searchParams.get("include")?.split(",").map(s => s.trim()).filter(Boolean);
         const includeStatuses = includeStatusesParam ?? ["pending", "confirmed", "seated", "completed"];
@@ -42,13 +41,6 @@ export async function GET(req: NextRequest) {
                 },
             }
         );
-
-
-        // (แนะนำ) อนุญาตเฉพาะ admin ดาวน์โหลด
-        // const { data: { user } } = await supabase.auth.getUser();
-        // if (!user) return new Response("Unauthorized", { status: 401 });
-        // const role = (user.user_metadata?.role as "admin" | "user" | undefined) ?? "user";
-        // if (role !== "admin") return new Response("Forbidden", { status: 403 });
 
         const { startISO, endISO, label } = getRange(rangeParam);
 

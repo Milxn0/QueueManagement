@@ -1,4 +1,3 @@
-// src/utils/status.ts
 export type StatusKey =
   | "pending"
   | "confirmed"

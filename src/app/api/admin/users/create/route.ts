@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// app/api/admin/users/create/route.ts
 import { NextResponse } from "next/server";
 import {
   createServerAuthedClient,
@@ -49,9 +48,9 @@ export async function POST(req: Request) {
       await admin.auth.admin.createUser({
         email,
         password,
-        email_confirm: true, // ถือว่ายืนยันแล้ว (ถ้าอยากส่งอีเมลยืนยันให้เปลี่ยนเป็น false)
+        email_confirm: true,
         phone: phone ?? undefined,
-        phone_confirm: !!phone, // ถ้ามีเบอร์ ให้ confirm ด้วย
+        phone_confirm: !!phone,
         user_metadata: { name, role },
       });
     if (createErr) {
@@ -73,7 +72,7 @@ export async function POST(req: Request) {
       .from("users")
       .upsert(
         { id: newId, name, email, phone, role },
-        { onConflict: "id", ignoreDuplicates: false } // ← ถ้ามีอยู่แล้วให้ update
+        { onConflict: "id", ignoreDuplicates: false }
       )
       .select()
       .single();

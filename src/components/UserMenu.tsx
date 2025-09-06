@@ -84,7 +84,7 @@ export default function UserMenu() {
               <div className="my-2 h-px bg-gray-100" />
 
               {/* รายการเมนู */}
-              {/* รายการเมนู */}
+
               <div className="flex flex-col gap-1">
                 {/* --- กลุ่ม Admin / Manager / Staff --- */}
                 {(profile?.role === "admin" ||
@@ -143,7 +143,7 @@ export default function UserMenu() {
                   </>
                 )}
 
-                {/* --- กลุ่ม Customer (และทุก role สามารถมีเมนูส่วนตัวได้ถ้าต้องการ) --- */}
+                {/* --- กลุ่ม Customer  --- */}
                 {profile?.role === "customer" && (
                   <>
                     <Link

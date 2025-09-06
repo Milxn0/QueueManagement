@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// src/middleware.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
-// กำหนด path ที่ middleware ต้องรัน (จำกัดเฉพาะ /admin และ /user)
+// กำหนด path ที่ middleware ต้องรัน
 export const config = {
   matcher: ["/admin/:path*", "/user/:path*"],
 };
@@ -40,7 +39,6 @@ function canAccess(pathname: string, role: Role) {
 }
 
 export async function middleware(req: NextRequest) {
-  // ใช้ NextResponse.next() ก่อนเสมอ เพื่อรองรับ set-cookie จาก Supabase
   const res = NextResponse.next();
 
   const supabase = createServerClient(
@@ -48,7 +46,6 @@ export async function middleware(req: NextRequest) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        // ✅ ใช้รูปแบบใหม่ (get / set / remove) ตาม @supabase/ssr รุ่นล่าสุด
         get(name: string) {
           return req.cookies.get(name)?.value;
         },
@@ -75,9 +72,7 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = "/auth/login";
     url.searchParams.set("next", nextUrl);
-    // ส่งต่อ set-cookie ที่ supabase ใส่ไว้ใน res ด้วย
     const redirect = NextResponse.redirect(url);
-    // คัดลอก Set-Cookie จาก res ไปยัง redirect
     res.headers.forEach((v, k) => {
       if (k.toLowerCase() === "set-cookie") {
         redirect.headers.append(k, v);
@@ -102,7 +97,6 @@ export async function middleware(req: NextRequest) {
     const url = req.nextUrl.clone();
     url.pathname = "/";
     const redirect = NextResponse.redirect(url);
-    // ส่งต่อ Set-Cookie เช่นกัน
     res.headers.forEach((v, k) => {
       if (k.toLowerCase() === "set-cookie") {
         redirect.headers.append(k, v);
@@ -111,6 +105,5 @@ export async function middleware(req: NextRequest) {
     return redirect;
   }
 
-  // ผ่าน → ดำเนินต่อ
   return res;
 }

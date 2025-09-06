@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
 
-export const dynamic = "force-dynamic"; // ห้าม cache (ให้ดึงสดเสมอ)
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const supabase = createServiceClient();
@@ -16,7 +16,6 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // admin ไว้บนสุด แล้วเรียงต่อด้วย created_at ใหม่ก่อน
   const weight = (u: any) => (u.role === "admin" ? 0 : 1);
   const sorted =
     (data ?? []).slice().sort((a: any, b: any) => {
