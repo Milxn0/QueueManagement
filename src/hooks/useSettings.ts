@@ -11,7 +11,7 @@ export type AppSettings = {
   store_name: string | null;
   store_image_url: string | null;
   contact_phone: string | null;
-  contact_line: string | null;
+  contact_ig: string | null;
   contact_facebook: string | null;
   menu_url: string | null;
   updated_at?: string | null;
@@ -26,7 +26,7 @@ const DEFAULTS: AppSettings = {
   store_name: null,
   store_image_url: null,
   contact_phone: null,
-  contact_line: null,
+  contact_ig: null,
   contact_facebook: null,
   menu_url: null,
   updated_at: null,

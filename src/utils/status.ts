@@ -7,12 +7,12 @@ export type StatusKey =
   | "canceled";
 
 const STATUS: Record<string, { badge: string; label: string }> = {
-  pending: { badge: "bg-yellow-100 text-yellow-700", label: "Pending" },
+  pending: { badge: "bg-amber-100 text-amber-700", label: "Pending" },
   confirm: { badge: "bg-indigo-100 text-indigo-700", label: "Confirmed" },
   confirmed: { badge: "bg-indigo-100 text-indigo-700", label: "Confirmed" },
   seated: { badge: "bg-emerald-100 text-emerald-700", label: "Seated" },
-  cancelled: { badge: "bg-red-100 text-red-700", label: "Cancelled" },
-  canceled: { badge: "bg-red-100 text-red-700", label: "Cancelled" },
+  cancelled: { badge: "bg-rose-100 text-rose-700", label: "Cancelled" },
+  canceled: { badge: "bg-rose-100 text-rose-700", label: "Cancelled" },
 };
 
 const FALLBACK = {

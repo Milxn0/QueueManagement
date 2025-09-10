@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @next/next/no-img-element */
 "use client";
+import AppSettingText from "../common/AppSettingText";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -48,8 +49,23 @@ export default function Navbar() {
       <div className="w-full px-3 sm:px-4 md:px-6 lg:px-10 xl:px-12 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <img src="/logo.jpg" alt="logo" className="h-7 w-7" />
-            <span className="font-semibold">Seoul BBQ</span>
+            <AppSettingText
+              keyName="store_image_url"
+              format={(v) => (
+                <img
+                  src={v && String(v).trim() ? String(v) : "/logo.jpg"}
+                  alt="logo"
+                  className="h-7 w-7 rounded object-cover"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = "/logo.jpg";
+                  }}
+                />
+              )}
+            />
+            <span className="font-semibold">
+              <AppSettingText keyName="store_name" />
+            </span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">
@@ -65,12 +81,11 @@ export default function Navbar() {
               active={pathname.startsWith("/user/contact")}
             />
 
-             <NavLink
+            <NavLink
               href="/user/menu-users"
               label="เมนู"
               active={pathname.startsWith("/user/menu-users")}
             />
-            
           </div>
         </div>
 

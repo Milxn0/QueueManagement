@@ -3,7 +3,6 @@ import React from "react";
 import { statusClass, statusLabel } from "@/utils/status";
 import { Row } from "@/types/queuerow";
 
-
 const formatDate = (value: string | null) => {
   if (!value) return "-";
   const d = new Date(value);

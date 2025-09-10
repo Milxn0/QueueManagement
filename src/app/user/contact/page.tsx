@@ -1,9 +1,36 @@
 "use client";
-import React from "react";
+import React, { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import AppSettingText from "@/components/common/AppSettingText";
+import { useSettings } from "@/hooks/useSettings";
+
+function extractHandle(url: string) {
+  try {
+    const u = new URL(url);
+    const path = u.pathname.replace(/^\/|\/$/g, "");
+    const [name] = path.split("/");
+    return name || "-";
+  } catch {
+    return "-";
+  }
+}
 
 export default function ContactPage() {
+  const { settings, loading } = useSettings();
+
+  const instagramUrl = settings?.contact_ig ?? "";
+  const facebookUrl = settings?.contact_facebook ?? "";
+
+  const igHandle = useMemo(
+    () => extractHandle(instagramUrl),
+    [instagramUrl]
+  );
+  const fbHandle = useMemo(
+    () => (facebookUrl ? extractHandle(facebookUrl) : "-"),
+    [facebookUrl]
+  );
+
   const Card = ({
     href,
     children,
@@ -76,10 +103,7 @@ export default function ContactPage() {
         {/* Cards */}
         <div className="space-y-4 text-base sm:text-lg font-medium text-gray-800">
           {/* Facebook */}
-          <Card
-            href="https://www.facebook.com/koreanbbqhatyai"
-            ariaLabel="ไปที่ Facebook Page"
-          >
+          <Card href={facebookUrl || undefined} ariaLabel="ไปที่ Facebook Page">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1877F2]/10 ring-1 ring-[#1877F2]/20">
               <Image
                 src="/Facebook-logo.png"
@@ -91,7 +115,9 @@ export default function ContactPage() {
               />
             </div>
             <div className="flex-1">
-              <div className="text-gray-900">Seoul Korean BBQ Restaurant</div>
+              <div className="text-gray-900">
+                {loading ? "…" : fbHandle !== "-" ? fbHandle : "Facebook Page"}
+              </div>
               <div className="text-xs text-gray-500">@koreanbbqhatyai</div>
             </div>
             <span className="ml-auto text-sm text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -100,10 +126,7 @@ export default function ContactPage() {
           </Card>
 
           {/* Instagram */}
-          <Card
-            href="https://www.instagram.com/seoulkoreanbbq_hatyai?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw=="
-            ariaLabel="ไปที่ Instagram"
-          >
+          <Card href={instagramUrl || undefined} ariaLabel="ไปที่ Instagram">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-pink-500/10 ring-1 ring-pink-500/20">
               <Image
                 src="/Instagram_logo_2022.svg.png"
@@ -115,7 +138,7 @@ export default function ContactPage() {
               />
             </div>
             <div className="flex-1">
-              <div className="text-gray-900">@seoulkoreanbbq_hatyai</div>
+              <div className="text-gray-900">@{loading ? "…" : igHandle}</div>
               <div className="text-xs text-gray-500">Instagram</div>
             </div>
             <span className="ml-auto text-sm text-indigo-600 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -141,7 +164,9 @@ export default function ContactPage() {
                 />
               </div>
               <div className="flex-1">
-                <div className="text-gray-900">074-239-246</div>
+                <div className="text-gray-900">
+                  <AppSettingText keyName="contact_phone" />
+                </div>
                 <div className="text-xs text-gray-500">โทรศัพท์</div>
               </div>
               <span className="ml-auto text-sm text-emerald-600 opacity-0 group-hover:opacity-100 transition-opacity">

@@ -1,4 +1,3 @@
-/* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
@@ -6,21 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
-
-type AppSettings = {
-  id: number;
-  is_system_open: boolean;
-  open_time: string; 
-  close_time: string; 
-  days_ahead: number; 
-  store_name: string | null;
-  store_image_url: string | null;
-  contact_phone: string | null;
-  contact_line: string | null;
-  contact_facebook: string | null;
-  menu_url: string | null;
-  updated_at?: string | null;
-};
+import type { AppSettings } from "@/types/appsetting";
 
 export default function SettingsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -62,7 +47,7 @@ export default function SettingsPage() {
         return;
       }
 
-      // โหลด settings 
+      // โหลด settings
       const { data, error } = await supabase
         .from("app_settings")
         .select("*")
@@ -75,18 +60,18 @@ export default function SettingsPage() {
         return;
       }
 
-      // ถ้ายังไม่มีข้อมูล ให้ใช้ค่า default
+      // default
       const def: AppSettings = {
         id: 1,
         is_system_open: true,
-        open_time: "09:00",
-        close_time: "21:00",
+        open_time: "13:00",
+        close_time: "20:30",
         days_ahead: 30,
-        store_name: "",
-        store_image_url: "",
-        contact_phone: "",
-        contact_line: "",
-        contact_facebook: "",
+        store_name: "SEOUL BBQ",
+        store_image_url: "https://xrxnwricckxzuhswoasc.supabase.co/storage/v1/object/public/public/store/main_1757518439926_38opvx.jpg",
+        contact_phone: "074-239-246",
+        contact_ig: "https://www.instagram.com/seoulkoreanbbq_hatyai?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
+        contact_facebook: "https://www.facebook.com/koreanbbqhatyai",
         menu_url: "",
       };
 
@@ -101,7 +86,7 @@ export default function SettingsPage() {
     setErr(null);
     setOk(null);
     try {
-      // บังคับให้มี id=1 เสมอ
+      // บังคับ id=1
       const payload = { ...settings, id: 1 };
       const { error } = await supabase.from("app_settings").upsert(payload, {
         onConflict: "id",
@@ -281,32 +266,64 @@ export default function SettingsPage() {
                 setSettings((s) => s && { ...s, store_name: e.target.value })
               }
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="เช่น ร้านอร่อยมาก"
+              placeholder="เช่น No.1 BBQ"
             />
           </div>
 
           <div className="rounded-xl border px-4 py-3">
             <label className="block text-sm font-medium text-gray-800">
-              รูปภาพหลัก (URL)
+              รูปภาพหลัก
             </label>
+
             <input
-              type="url"
-              value={settings?.store_image_url ?? ""}
-              onChange={(e) =>
-                setSettings(
-                  (s) => s && { ...s, store_image_url: e.target.value }
-                )
-              }
-              className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://..."
+              type="file"
+              accept="image/*"
+              onChange={async (e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+
+                const BUCKET = "public";
+                const ext = file.name.split(".").pop()?.toLowerCase() ?? "jpg";
+                const rand = Math.random().toString(36).slice(2, 8);
+                const filePath = `store/main_${Date.now()}_${rand}.${ext}`;
+
+                const { error: upErr } = await supabase.storage
+                  .from(BUCKET)
+                  .upload(filePath, file, {
+                    upsert: true,
+                    contentType: file.type,
+                  });
+                if (upErr) {
+                  alert("อัปโหลดไม่สำเร็จ: " + upErr.message);
+                  return;
+                }
+
+                const { data } = supabase.storage
+                  .from(BUCKET)
+                  .getPublicUrl(filePath);
+                const publicUrl = data.publicUrl;
+                setSettings((s) => s && { ...s, store_image_url: publicUrl });
+
+                const { error: dbErr } = await supabase
+                  .from("app_settings")
+                  .upsert(
+                    {
+                      id: 1,
+                      store_image_url: publicUrl,
+                      updated_at: new Date().toISOString(),
+                    },
+                    { onConflict: "id" }
+                  );
+
+                if (dbErr) {
+                  alert("บันทึก URL ลงตารางไม่สำเร็จ: " + dbErr.message);
+                }
+              }}
+              className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-700 hover:file:bg-indigo-100"
             />
-            {settings?.store_image_url ? (
-              <img
-                src={settings.store_image_url}
-                alt="preview"
-                className="mt-2 h-28 w-auto rounded-lg border object-cover"
-              />
-            ) : null}
+            <p className="mt-2 text-xs text-red-500">
+              *รองรับแค่ JPG/PNG/WebP
+            </p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
@@ -325,17 +342,20 @@ export default function SettingsPage() {
 
           <div className="rounded-xl border px-4 py-3">
             <label className="block text-sm font-medium text-gray-800">
-              LINE
+              Instagram
             </label>
             <input
               type="text"
-              value={settings?.contact_line ?? ""}
+              value={settings?.contact_ig ?? ""}
               onChange={(e) =>
-                setSettings((s) => s && { ...s, contact_line: e.target.value })
+                setSettings((s) => s && { ...s, contact_ig: e.target.value })
               }
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="@yourline"
+              placeholder="Instagram URL"
             />
+            <p className="mt-2 text-xs text-red-500">
+              *รองรับแค่ URL เท่านั้น
+            </p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
@@ -351,13 +371,16 @@ export default function SettingsPage() {
                 )
               }
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://facebook.com/yourpage"
+              placeholder="Facebook URL"
             />
+            <p className="mt-2 text-xs text-red-500">
+              *รองรับแค่ URL เท่านั้น
+            </p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
             <label className="block text-sm font-medium text-gray-800">
-              เมนู (URL ไฟล์ภาพ/PDF)
+              เมนู (ไฟล์ภาพ/PDF)
             </label>
             <input
               type="url"
@@ -366,7 +389,7 @@ export default function SettingsPage() {
                 setSettings((s) => s && { ...s, menu_url: e.target.value })
               }
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
-              placeholder="https://... (รูป/ PDF ของเมนู)"
+              placeholder="(รูป/ PDF ของเมนู)"
             />
           </div>
         </div>
