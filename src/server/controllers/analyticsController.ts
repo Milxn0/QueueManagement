@@ -13,7 +13,7 @@ export type AnalyticsResult = {
   range: { startISO: string; endISO: string };
   totals: {
     overall: number;
-    pending: number;
+    waiting: number;
     confirmed: number;
     seated: number;
     cancelled: number;
@@ -42,10 +42,10 @@ function hourBangkok(d: Date) {
 }
 function normStatus(
   s: string | null
-): "pending" | "confirmed" | "seated" | "cancelled" | "other" {
+): "waiting" | "confirmed" | "seated" | "cancelled" | "other" {
   const v = (s ?? "").toLowerCase();
   if (v.includes("cancel")) return "cancelled";
-  if (v === "pending") return "pending";
+  if (v === "waiting") return "waiting";
   if (v === "seated") return "seated";
   if (v === "confirm" || v === "confirmed") return "confirmed";
   return "other";
@@ -83,7 +83,7 @@ export async function getAnalytics(
 
   const rows = data ?? [];
 
-  let pending = 0,
+  let waiting = 0,
     confirmed = 0,
     seated = 0,
     cancelled = 0,
@@ -106,8 +106,8 @@ export async function getAnalytics(
     heatmap[wd][hh] += 1;
 
     switch (normStatus((r as any).status ?? null)) {
-      case "pending":
-        pending++;
+      case "waiting":
+        waiting++;
         break;
       case "confirmed":
         confirmed++;
@@ -132,7 +132,7 @@ export async function getAnalytics(
     range: { startISO, endISO },
     totals: {
       overall: rows.length,
-      pending,
+      waiting,
       confirmed,
       seated,
       cancelled,

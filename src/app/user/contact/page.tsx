@@ -1,10 +1,14 @@
 "use client";
+
 import React, { useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import AppSettingText from "@/components/common/AppSettingText";
 import { useSettings } from "@/hooks/useSettings";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faAddressCard } from "@fortawesome/free-regular-svg-icons/faAddressCard";
 
+/* ---------------- helpers ---------------- */
 function extractHandle(url: string) {
   try {
     const u = new URL(url);
@@ -16,16 +20,14 @@ function extractHandle(url: string) {
   }
 }
 
+/* ---------------- page ---------------- */
 export default function ContactPage() {
   const { settings, loading } = useSettings();
 
   const instagramUrl = settings?.contact_ig ?? "";
   const facebookUrl = settings?.contact_facebook ?? "";
 
-  const igHandle = useMemo(
-    () => extractHandle(instagramUrl),
-    [instagramUrl]
-  );
+  const igHandle = useMemo(() => extractHandle(instagramUrl), [instagramUrl]);
   const fbHandle = useMemo(
     () => (facebookUrl ? extractHandle(facebookUrl) : "-"),
     [facebookUrl]
@@ -33,24 +35,21 @@ export default function ContactPage() {
 
   const Card = ({
     href,
-    children,
     ariaLabel,
-    className,
+    children,
   }: {
     href?: string;
-    children: React.ReactNode;
     ariaLabel: string;
-    className?: string;
+    children: React.ReactNode;
   }) => {
     const content = (
       <div
         className={[
           "group flex items-center gap-4 rounded-2xl",
-          "border border-transparent bg-white/70 px-4 py-4 shadow-sm",
-          "ring-1 ring-gray-100 hover:ring-indigo-200",
+          "bg-white px-4 py-4",
+          "border border-gray-200/70 ring-1 ring-gray-100/70",
           "transition-all duration-200 ease-out",
-          "hover:shadow-md hover:-translate-y-[1px]",
-          className ?? "",
+          "hover:border-indigo-200 hover:ring-indigo-100",
         ].join(" ")}
       >
         {children}
@@ -64,44 +63,40 @@ export default function ContactPage() {
         rel="noopener noreferrer"
         aria-label={ariaLabel}
         prefetch={false}
-        className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-2xl"
+        className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
       >
         {content}
       </Link>
     ) : (
       <div
         aria-label={ariaLabel}
-        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-2xl"
+        className="rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
       >
         {content}
       </div>
     );
   };
 
-  const Pill = ({ text }: { text: string }) => (
-    <span className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-100">
-      {text}
-    </span>
-  );
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-indigo-50/40 px-4 py-10 flex items-center justify-center">
-      <main className="w-full max-w-xl rounded-3xl border border-indigo-100 bg-white/80 shadow-xl backdrop-blur-sm px-6 py-8">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <Pill text="Contact" />
-          <h1 className="mt-2 text-3xl sm:text-4xl font-extrabold tracking-tight">
-            <span className="bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
+    <div className="min-h-screen bg-gray-50 px-6 py-10">
+      <main className="w-full max-w-4xl mx-auto">
+        <div className="relative mb-8 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
+          <div className="p-6">
+            <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+              <FontAwesomeIcon icon={faAddressCard} />
+              Contact
+            </div>
+            <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
               ช่องทางการติดต่อ
-            </span>
-          </h1>
-          <p className="mt-2 text-sm text-gray-600">
-            ติดต่อเราได้ทาง Facebook, Instagram หรือโทรศัพท์
-          </p>
+            </h1>
+            <p className="mt-1 text-sm text-gray-600">
+              ติดต่อเราได้ทาง Facebook, Instagram หรือโทรศัพท์
+            </p>
+          </div>
         </div>
 
         {/* Cards */}
-        <div className="space-y-4 text-base sm:text-lg font-medium text-gray-800">
+        <div className="mt-6 space-y-4 text-base sm:text-lg font-medium text-gray-800">
           {/* Facebook */}
           <Card href={facebookUrl || undefined} ariaLabel="ไปที่ Facebook Page">
             <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[#1877F2]/10 ring-1 ring-[#1877F2]/20">
@@ -147,12 +142,13 @@ export default function ContactPage() {
           </Card>
 
           {/* Tel */}
-          <a
+          <Link
             href="tel:074239246"
             aria-label="โทรศัพท์ 074-239-246"
-            className="block focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400 rounded-2xl"
+            className="block rounded-2xl focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-400"
+            prefetch={false}
           >
-            <div className="group flex items-center gap-4 rounded-2xl border border-transparent bg-white/70 px-4 py-4 shadow-sm ring-1 ring-gray-100 hover:ring-emerald-200 transition-all duration-200 hover:shadow-md hover:-translate-y-[1px]">
+            <div className="group flex items-center gap-4 rounded-2xl bg-white px-4 py-4 border border-gray-200/70 ring-1 ring-gray-100/70 transition-all duration-200 hover:border-emerald-200 hover:ring-emerald-100">
               <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-emerald-500/10 ring-1 ring-emerald-500/20">
                 <Image
                   src="/tel.png"
@@ -173,11 +169,11 @@ export default function ContactPage() {
                 โทรเลย →
               </span>
             </div>
-          </a>
+          </Link>
         </div>
 
         {/* Footer note */}
-        <p className="mt-6 text-center text-xs text-gray-500">
+        <p className="mt-8 text-center text-xs text-gray-500">
           จันทร์ - ศุกร์ 13:00–21:00 น. <br />
           เสาร์ - อาทิตย์ 12:00–21:00 น. <br />
           (เวลาอาจมีการเปลี่ยนแปลง)

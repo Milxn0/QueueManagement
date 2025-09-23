@@ -13,6 +13,8 @@ import { validateReservationTime } from "@/utils/reservation";
 import { createOTP, verifyOTP } from "@/lib/otp";
 import { ensureProfile } from "@/lib/profile";
 import { insertReservationWithRetries } from "@/lib/reservations";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUsersLine } from "@fortawesome/free-solid-svg-icons/faUsersLine";
 
 export default function ReservationPage() {
   // auth
@@ -191,23 +193,23 @@ export default function ReservationPage() {
 
           <div className="mt-6 rounded-xl border bg-gray-50 p-4">
             <div className="text-sm text-gray-600">รหัสคิวของคุณ</div>
-            <div className="mt-1 text-3xl font-bold tracking-widest">
+            <div className="mt-1 text-3xl font-bold tracking-widest text-indigo-600">
               {queueCode}
             </div>
           </div>
 
           <div className="mt-6 flex gap-3">
             <Link
-              href="/user/queue-history"
+              href="/"
               className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
             >
-              ดูประวัติการจอง
-            </Link>
+              ดูคิวทั้งปัจจุบัน
+            </Link>{" "}
             <Link
-              href="/"
+              href="/user/queue-history"
               className="rounded-xl border border-gray-300 px-4 py-2 hover:bg-gray-50"
             >
-              กลับหน้าแรก
+              ดูประวัติการจองทั้งหมด
             </Link>
           </div>
         </div>
@@ -230,7 +232,8 @@ export default function ReservationPage() {
         <div className="relative overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
           <div className="p-6">
             <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-              Queue Reservation
+              <FontAwesomeIcon icon={faUsersLine} />
+              Reservation
             </div>
             <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
               จองคิวร้านอาหาร

@@ -75,7 +75,7 @@ export async function insertReservationWithRetries(
       reservation_datetime: reservationISO,
       partysize: partySize,
       queue_code,
-      status: "pending",
+      status: "waiting",
     });
     if (!error) return queue_code;
     if (

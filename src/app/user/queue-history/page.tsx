@@ -1,57 +1,83 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
-import Link from "next/link";
 import HistoryTable from "@/components/user/HistoryTable";
-import { toLocalInputValue, localInputToISO, formatBangkok, pad } from "@/utils/date";
-import { canModify } from "@/utils/reservation";
-import { updateReservationByUser, cancelReservationByUser } from "@/lib/reservations";
+import UserReservationDetailModal from "@/components/user/UserReservationDetailModal";
+import { updateReservationByUser } from "@/lib/reservations";
 import type { Reservation } from "@/types/reservation";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faClockRotateLeft } from "@fortawesome/free-solid-svg-icons/faClockRotateLeft";
 
+type DetailRow = {
+  id: string;
+  reservation_datetime: string | null;
+  partysize: number | string | null;
+  queue_code: string | null;
+  status: string | null;
+  users?: { name?: string | null } | null;
+  user?: { name?: string | null } | null;
+  tbl?: { table_name?: string | null } | null;
+  table_name?: string | null;
+  user_id?: string | null;
+  cancelled_reason?: string | null;
+  cancelled_by_user_id?: string | null;
+  cancelled_by?: {
+    id: string;
+    name?: string | null;
+    role?: string | null;
+  } | null;
+};
 
 export default function UserReservationHistoryPage() {
   const supabase = createClient();
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
-  const [me, setMe] = useState<{ id: string } | null>(null);
+  type Me = { id: string; name?: string | null };
+  const [me, setMe] = useState<Me | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      setMe(
+        data.user
+          ? {
+              id: data.user.id,
+              name:
+                (data.user.user_metadata?.name as string | undefined) ??
+                (data.user.user_metadata?.full_name as string | undefined) ??
+                (data.user.user_metadata?.username as string | undefined) ??
+                (data.user.email ? data.user.email.split("@")[0] : null),
+            }
+          : null
+      );
+    })();
+  }, [supabase]);
   const [rows, setRows] = useState<Reservation[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  // edit modal states
-  const [editing, setEditing] = useState<Reservation | null>(null);
-  const [editDateTime, setEditDateTime] = useState<string>("");
-  const [editPartySize, setEditPartySize] = useState<string>("");
+  // detail modal
+  const [detailRow, setDetailRow] = useState<DetailRow | null>(null);
 
-  // ---------- helpers ----------
-  const tz = "Asia/Bangkok";
-
-  // ---------- data load ----------
-  useEffect(() => {
-    let mounted = true;
-    (async () => {
-      const res = await fetch("/api/user/reservations", { cache: "no-store" });
-      if (!mounted) return;
-      const data = await res.json();
-      setRows(data);
-      setLoading(false);
-    })();
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
+  // refetch with join table for table_name
   async function refetch() {
     if (!me?.id) return;
     const { data, error: qErr } = await supabase
       .from("reservations")
       .select(
-        "id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id, users!reservations_user_id_fkey(name, phone)"
+        `
+    id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
+    cancelled_reason, cancelled_by_user_id, cancelled_at,
+    users:users!reservations_user_id_fkey(name, phone),
+    tbl:tables!reservations_table_id_fkey(table_name),
+    cancelled_by:users!reservations_cancelled_by_user_id_fkey(id, name, role)  -- 👈 join ผู้ยกเลิก
+  `
       )
-
       .eq("user_id", me.id)
       .order("reservation_datetime", { ascending: false });
 
@@ -62,44 +88,51 @@ export default function UserReservationHistoryPage() {
     }
   }
 
-  // ---------- actions ----------
-  function openEditModal(r: Reservation) {
-    setEditing(r);
-    setEditDateTime(toLocalInputValue(r.reservation_datetime));
-    setEditPartySize(String(r.partysize ?? ""));
-  }
-
-  async function submitEdit() {
-  if (!editing || !me?.id) return;
-  const iso = localInputToISO(editDateTime);
-  const size = Number(editPartySize);
-  if (!Number.isFinite(size) || size <= 0) {
-    alert("จำนวนคนต้องเป็นตัวเลขมากกว่า 0");
-    return;
-  }
-  await updateReservationByUser(editing.id, me.id, iso, size);
-  setEditing(null);
-  await refetch();
-}
-
-
-  async function cancelReservation(r: Reservation) {
-  if (!me?.id) return;
-  if (!confirm("ยืนยันยกเลิกคิวนี้?")) return;
-  await cancelReservationByUser(r.id, me.id);
-  await refetch();
-}
-
+  // โหลดด้วยคิวรีที่ join แล้วทันทีเมื่อรู้ me.id
+  useEffect(() => {
+    if (!me?.id) return;
+    setLoading(true);
+    (async () => {
+      await refetch();
+      setLoading(false);
+    })();
+  }, [me?.id]);
 
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
 
-  // ---------- UI ----------
+  // modal handlers
+  async function handleSubmitEdit(id: string, iso: string, size: number) {
+    if (!me?.id) return;
+    await updateReservationByUser(id, me.id, iso, size);
+    await refetch();
+  }
+
+  async function handleCancelWithReason(id: string, reason: string) {
+    if (!me?.id) return;
+    const { error: err } = await supabase
+      .from("reservations")
+      .update({
+        status: "cancelled",
+        cancelled_reason: reason || "—",
+        cancelled_by_user_id: me.id,
+        cancelled_at: new Date().toISOString(),
+      })
+      .eq("id", id)
+      .eq("user_id", me.id);
+    if (err) {
+      alert("ยกเลิกไม่สำเร็จ: " + err.message);
+      return;
+    }
+    await refetch();
+  }
+
   return (
     <div className="max-w-4xl mx-auto px-4 py-6">
       {/* Header */}
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            <FontAwesomeIcon icon={faClockRotateLeft} />
             ประวัติการจองคิว
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
@@ -112,113 +145,39 @@ export default function UserReservationHistoryPage() {
       </div>
 
       {loading && (
-        <div className="space-y-3">
-          <div className="h-10 rounded-xl bg-gray-200/30 animate-pulse" />
-          <div className="h-10 rounded-xl bg-gray-200/30 animate-pulse" />
-          <div className="h-10 rounded-xl bg-gray-200/30 animate-pulse" />
-        </div>
+        <div className="py-16 text-center text-gray-500">กำลังโหลด...</div>
       )}
 
-      {error && (
-        <div className="mb-4 rounded-xl border border-red-300 bg-red-50 px-4 py-3 text-red-700">
-          เกิดข้อผิดพลาด: {error}
-        </div>
+      {!loading && error && (
+        <div className="py-8 text-center text-red-600">{error}</div>
+      )}
+
+      {!loading && !error && (
+        <HistoryTable rows={rows} onOpenDetail={(r) => setDetailRow(r)} />
       )}
 
       {empty && (
-        <div className="rounded-xl border px-4 py-5 bg-gray-50">
-          <p className="text-sm">
-            ตอนนี้คุณยังไม่มีคิว —{" "}
-            <Link
-              className="text-indigo-600 underline"
-              href="/user/reservation"
-            >
-              จองคิว
-            </Link>{" "}
-            ได้เลย
-          </p>
+        <div className="py-16 text-center text-gray-500">
+          ยังไม่มีประวัติการจอง
         </div>
       )}
 
-      {!loading && rows.length > 0 && (
-        <div className="overflow-x-auto rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
-          <HistoryTable rows={rows} />
-        </div>
-      )}
-
-      {/* Edit Modal */}
-      {editing && (
-        <div
-          className="fixed inset-0 z-50 flex items-end md:items-center justify-center bg-black/40 p-0 md:p-4"
-          aria-modal="true"
-          role="dialog"
-        >
-          <div className="w-full md:max-w-md rounded-t-2xl md:rounded-2xl border border-indigo-600 bg-white shadow-2xl">
-            <div className="flex items-center justify-between border-b border-indigo-100 px-4 py-3">
-              <h2 className="text-base font-semibold text-indigo-600">
-                แก้ไขการจอง
-              </h2>
-              <button
-                className="rounded-full p-1.5 hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                onClick={() => setEditing(null)}
-                aria-label="Close"
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                  <path
-                    fill="currentColor"
-                    d="m12 10.586l4.95-4.95l1.414 1.414L13.414 12l4.95 4.95l-1.414 1.414L12 13.414l-4.95 4.95l-1.414-1.414L10.586 12l-4.95-4.95L7.05 5.636z"
-                  />
-                </svg>
-              </button>
-            </div>
-            <div className="px-4 py-4">
-              <div className="space-y-3">
-                <label className="block">
-                  <span className="mb-1 block text-sm text-gray-700">
-                    วันเวลาใหม่
-                  </span>
-                  <input
-                    type="datetime-local"
-                    className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                    value={editDateTime}
-                    onChange={(e) => setEditDateTime(e.target.value)}
-                  />
-                </label>
-                <label className="block">
-                  <span className="mb-1 block text-sm text-gray-700">
-                    จำนวนคน
-                  </span>
-                  <input
-                    type="number"
-                    min={1}
-                    className="w-full rounded-xl border border-indigo-200 bg-white px-3 py-2 outline-none transition focus:border-indigo-400 focus:ring-2 focus:ring-indigo-200"
-                    value={editPartySize}
-                    onChange={(e) => setEditPartySize(e.target.value)}
-                  />
-                </label>
-                <p className="text-xs text-gray-500">
-                  *แก้ไขได้เมื่อสถานะเป็น{" "}
-                  <span className="font-medium text-red-500">pending</span>{" "}
-                  เท่านั้น
-                </p>
-              </div>
-            </div>
-            <div className="flex justify-end gap-2 border-t border-indigo-100 px-4 py-3">
-              <button
-                className="rounded-xl border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                onClick={() => setEditing(null)}
-              >
-                ปิด
-              </button>
-              <button
-                className="rounded-xl bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
-                onClick={submitEdit}
-              >
-                บันทึกการเปลี่ยนแปลง
-              </button>
-            </div>
-          </div>
-        </div>
+      {detailRow && (
+        <UserReservationDetailModal
+          open={Boolean(detailRow)}
+          row={detailRow}
+          onClose={() => setDetailRow(null)}
+          onSubmitEdit={handleSubmitEdit}
+          onCancelWithReason={(id, reason) =>
+            handleCancelWithReason(id, reason)
+          }
+          fallbackName={
+            detailRow?.users?.name?.trim() ||
+            detailRow?.user?.name?.trim() ||
+            me?.name?.trim() ||
+            undefined
+          }
+        />
       )}
     </div>
   );

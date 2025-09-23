@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
         // default: ไม่นับ cancelled, no_show
         const includeStatusesParam = searchParams.get("include")?.split(",").map(s => s.trim()).filter(Boolean);
-        const includeStatuses = includeStatusesParam ?? ["pending", "confirmed", "seated", "completed"];
+        const includeStatuses = includeStatusesParam ?? ["waiting", "confirmed", "seated", "completed"];
 
         // === Supabase server client ที่ถูกต้องสำหรับ Route/Server ===
         const cookieStore = await cookies(); // ✅ ต้อง await

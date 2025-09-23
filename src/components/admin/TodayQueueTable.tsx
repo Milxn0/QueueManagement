@@ -3,7 +3,8 @@
 "use client";
 import React from "react";
 import { statusClass, statusLabel } from "@/utils/status";
-
+import { faEye } from "@fortawesome/free-solid-svg-icons";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 // ---- local helpers ----
 const formatDate = (value: string | null) => {
   if (!value) return "-";
@@ -44,7 +45,7 @@ export default function TodayQueueTable({
       {rowsLoading ? (
         <tbody>
           <tr>
-            <td colSpan={8} className="p-6 text-center text-gray-500">
+            <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
               กำลังโหลด...
             </td>
           </tr>
@@ -52,28 +53,32 @@ export default function TodayQueueTable({
       ) : rows.length === 0 ? (
         <tbody>
           <tr>
-            <td colSpan={8} className="p-6 text-center text-gray-500">
+            <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
               ไม่พบข้อมูล
             </td>
           </tr>
         </tbody>
       ) : (
-        <tbody>
+        <tbody className="divide-y divide-gray-100">
           {rows.map((r) => (
-            <tr key={r.id} className="border-b last:border-0">
-              <td className="px-4 py-3 font-medium text-gray-800">
+            <tr key={r.id} className="transition-colors hover:bg-indigo-50/40">
+              <td className="px-5 py-4 font-semibold text-indigo-700">
                 {r.queue_code ?? "-"}
               </td>
-              <td className="px-4 py-3 text-gray-700">
-                {r.user?.name ? (r.user?.name as string).slice(0, 8) : "-"}
+
+              <td className="px-5 py-4 text-gray-800">
+                {r.user?.name ? (r.user?.name as string).slice(0, 24) : "-"}
               </td>
-              <td className="px-4 py-3 text-gray-700">
+
+              <td className="px-5 py-4 text-gray-800">
                 {formatDate(r.reservation_datetime)}
               </td>
-              <td className="px-4 py-3 text-gray-700">{r.partysize ?? "-"}</td>
-              <td className="px-4 py-3">
+
+              <td className="px-5 py-4 text-gray-800">{r.partysize ?? "-"}</td>
+
+              <td className="px-5 py-4">
                 <span
-                  className={`inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-semibold ${statusClass(
+                  className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass(
                     r.status
                   )}`}
                   title={r.status ?? "-"}
@@ -82,12 +87,13 @@ export default function TodayQueueTable({
                 </span>
               </td>
 
-              <td className="px-4 py-3">
+              <td className="px-5 py-4">
                 <button
                   type="button"
                   onClick={() => onOpenDetail(r)}
-                  className="inline-flex items-center rounded-xl bg-indigo-600 text-white px-3 py-1.5 hover:bg-indigo-900"
+                  className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 text-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400 whitespace-nowrap"
                 >
+                  <FontAwesomeIcon icon={faEye} />
                   ดูรายละเอียด
                 </button>
               </td>

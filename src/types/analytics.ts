@@ -5,7 +5,7 @@ export type AnalyticsRange = {
 
 export type AnalyticsTotals = {
   overall: number;
-  pending: number;
+  waiting: number;
   confirmed: number;
   seated: number;
   cancelled: number;

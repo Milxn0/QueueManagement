@@ -7,6 +7,7 @@ export type ReservationForDetail = {
   user?: { name: string | null } | null;
   cancelled_by?: { name: string | null; role?: string | null } | null;
   cancelled_reason?: string | null;
+  cancelled_at?: string | null;
 };
 
 export type OccupiedItem = {

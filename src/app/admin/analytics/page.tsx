@@ -15,6 +15,8 @@ import SummaryCard from "@/components/admin/SummaryCard";
 import type { AnalyticsResult } from "@/types/analytics";
 import type { Series, LineSeries } from "@/types/chart";
 import type { Row } from "@/types/analytics";
+import { faChartSimple } from "@fortawesome/free-solid-svg-icons/faChartSimple";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 
 type ExportMode = "day" | "month" | "year";
 
@@ -52,7 +54,6 @@ export default function AnalyticsPage() {
   }, [startISO, endISO]);
 
   const fetchRows = useCallback(async () => {
-    // ดึงข้อมูลคิวของเดือนนั้น ๆ เพื่อ aggregate เป็นกราฟเส้นแบบ All/Confirmed/Pending/Cancelled
     const { data, error } = await supabase
       .from("reservations")
       .select("id,reservation_datetime,status")
@@ -163,7 +164,7 @@ export default function AnalyticsPage() {
 
   // ----- สร้างซีรีส์สำหรับกราฟเส้นจาก rows -----
   const { series, maxY, totals } = useMemo(() => {
-    const pending = new Array(daysInMonth).fill(0);
+    const waiting = new Array(daysInMonth).fill(0);
     const confirmed = new Array(daysInMonth).fill(0);
     const cancelled = new Array(daysInMonth).fill(0);
     const all = new Array(daysInMonth).fill(0);
@@ -177,27 +178,27 @@ export default function AnalyticsPage() {
       const s = (r.status ?? "").toLowerCase();
       all[dayIdx]++;
 
-      if (s === "pending") pending[dayIdx]++;
+      if (s === "waiting") waiting[dayIdx]++;
       else if (s === "cancelled" || s === "no_show") cancelled[dayIdx]++;
       else if (s === "confirmed" || s === "seated" || s === "completed")
         confirmed[dayIdx]++;
       else confirmed[dayIdx]++;
     }
 
-    const m = Math.max(5, ...pending, ...confirmed, ...cancelled, ...all);
+    const m = Math.max(5, ...waiting, ...confirmed, ...cancelled, ...all);
 
     return {
       series: [
         { name: "ทั้งหมด", color: "#0ea5e9", values: all },
         { name: "ยืนยันแล้ว", color: "#22c55e", values: confirmed },
-        { name: "รอคอนเฟิร์ม", color: "#f59e0b", values: pending },
+        { name: "รอคอนเฟิร์ม", color: "#f59e0b", values: waiting },
         { name: "ยกเลิก/ไม่มา", color: "#ef4444", values: cancelled },
       ] as LineSeries[],
       maxY: m,
       totals: {
         all: all.reduce((a, b) => a + b, 0),
         confirmed: confirmed.reduce((a, b) => a + b, 0),
-        pending: pending.reduce((a, b) => a + b, 0),
+        waiting: waiting.reduce((a, b) => a + b, 0),
         cancelled: cancelled.reduce((a, b) => a + b, 0),
       },
     };
@@ -208,6 +209,7 @@ export default function AnalyticsPage() {
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            <FontAwesomeIcon icon={faChartSimple} />
             Analytics
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
@@ -307,7 +309,7 @@ export default function AnalyticsPage() {
         />
         <SummaryCard
           label="รอคอนเฟิร์ม"
-          value={totals.pending}
+          value={totals.waiting}
           className="bg-amber-50 text-amber-700"
         />
         <SummaryCard

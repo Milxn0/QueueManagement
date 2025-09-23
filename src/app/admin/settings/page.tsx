@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import type { AppSettings } from "@/types/appsetting";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faGear } from "@fortawesome/free-solid-svg-icons/faGear";
 
 export default function SettingsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -131,13 +133,14 @@ export default function SettingsPage() {
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            <FontAwesomeIcon icon={faGear} />
             Settings
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
             การตั้งค่าระบบจอง & ข้อมูลร้าน
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            เข้าถึงได้เฉพาะ Admin / Manager
+            เข้าถึงได้เฉพาะ Admin
           </p>
         </div>
       </div>

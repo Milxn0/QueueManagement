@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faLayerGroup } from "@fortawesome/free-solid-svg-icons/faLayerGroup";
 
 type Reservation = {
   id: string;
@@ -35,7 +37,7 @@ export default function HomePage() {
         const { data, error } = await supabase
           .from("reservations")
           .select("id,user_id,reservation_datetime,queue_code")
-          .eq("status", "pending")
+          .eq("status", "waiting")
           .gte("reservation_datetime", nowIso)
           .order("reservation_datetime", { ascending: true })
           .order("created_at", { ascending: true });
@@ -93,6 +95,7 @@ export default function HomePage() {
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
+            <FontAwesomeIcon icon={faLayerGroup} />
             My Queue
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">

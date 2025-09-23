@@ -18,6 +18,9 @@ import {
   faLock,
   faEye,
   faEyeSlash,
+  faCrown,
+  faUserGear,
+  faUserTie,
 } from "@fortawesome/free-solid-svg-icons";
 
 export type Role = "admin" | "staff" | "customer" | string;
@@ -101,8 +104,7 @@ export default function UserDetailModal({
       await navigator.clipboard.writeText(user.id);
       setMsg("คัดลอก User ID แล้ว");
       setTimeout(() => setMsg(null), 1600);
-    } catch {
-    }
+    } catch {}
   };
 
   const validateProfile = () => {
@@ -233,9 +235,15 @@ export default function UserDetailModal({
       return "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200";
     if (v === "staff")
       return "bg-amber-50 text-amber-700 ring-1 ring-amber-200";
-    if (v === "manager")
-      return "bg-violet-50 text-violet-700 ring-1 ring-violet-200";
+    if (v === "manager") return "bg-pink-50 text-pink-700 ring-1 ring-pink-200";
     return "bg-gray-100 text-gray-700 ring-1 ring-gray-200";
+  };
+  const roleIcon = (role?: string | null) => {
+    const v = (role ?? "").toLowerCase();
+    if (v === "admin") return faCrown;
+    if (v === "staff") return faUserGear;
+    if (v === "manager") return faUserTie;
+    return faUser;
   };
 
   return (
@@ -265,13 +273,24 @@ export default function UserDetailModal({
               </h3>
               <div className="mt-1 text-xs text-gray-600 flex items-center gap-2">
                 <span
-                  className={`inline-flex items-center rounded-full px-2 py-0.5 ${roleBadge(
-                    (form.role as Role) ?? user.role
+                  className={`inline-flex items-center rounded-full px-2 py-0.5 gap-1.5 ${roleBadge(
+                    ((form.role as Role) ?? user.role) || ""
                   )}`}
                 >
-                  <FontAwesomeIcon icon={faUserShield} className="mr-1" />
-                  {(form.role as Role) ?? user.role}
+                  {(() => {
+                    const roleVal = ((form.role as Role) ?? user.role) || "";
+                    return (
+                      <>
+                        <FontAwesomeIcon
+                          icon={roleIcon(roleVal)}
+                          className="h-3.5 w-3.5"
+                        />
+                        <span className="capitalize">{roleVal || "-"}</span>
+                      </>
+                    );
+                  })()}
                 </span>
+
                 <span className="text-gray-400">•</span>
                 <span>
                   สร้างเมื่อ: {formatDateTime(user.created_at ?? null)}

@@ -2,6 +2,7 @@
 export type Step = 1 | 2;
 
 export type Reservation = {
+  user: any;
   id: string;
   user_id: string;
   reservation_datetime: string;

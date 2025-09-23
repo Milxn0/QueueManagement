@@ -12,6 +12,10 @@ import {
   faCircleCheck,
   faMagnifyingGlass,
   faEye,
+  faCrown,
+  faUserTie,
+  faUser,
+  faUserGear,
 } from "@fortawesome/free-solid-svg-icons";
 import { faUserPlus } from "@fortawesome/free-solid-svg-icons";
 import AddUserModal from "@/components/admin/AddUserModal";
@@ -269,7 +273,7 @@ export default function ManageUsersPage() {
               <th className="px-4 py-3 font-semibold">Email</th>
               <th className="px-4 py-3 font-semibold">Phone</th>
               <th className="px-4 py-3 font-semibold">User ID</th>
-              <th className="px-4 py-3 font-semibold w-36">Actions</th>
+              <th className="px-5 py-4 font-semibold min-w-[180px]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -283,46 +287,86 @@ export default function ManageUsersPage() {
                 </td>
               </tr>
             ) : (
-              filteredUsers.map((u) => (
-                <tr key={u.id} className="border-t hover:bg-gray-50/60">
-                  <td className="px-4 py-3">
-                    <span
-                      className={[
-                        "inline-flex items-center rounded-full px-2 py-1 text-xs ring-1",
-                        u.role === "admin"
-                          ? "bg-indigo-50 text-indigo-700 ring-indigo-200"
-                          : u.role === "staff"
-                          ? "bg-amber-50 text-amber-700 ring-amber-200"
-                          : u.role === "manager"
-                          ? "bg-pink-50 text-pink-700 ring-pink-200"
-                          : "bg-gray-100 text-gray-700 ring-gray-200",
-                      ].join(" ")}
-                    >
-                      {u.role}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3">{u.name ?? "-"}</td>
-                  <td className="px-4 py-3">{u.email ?? "-"}</td>
-                  <td className="px-4 py-3">{u.phone ?? "-"}</td>
-                  <td className="px-4 py-3 font-mono text-[11px] text-gray-600">
-                    {u.id}
-                  </td>
-                  <td className="px-4 py-3">
-                    <button
-                      onClick={() => {
-                        setDetailUser(u);
-                        setDetailOpen(true);
-                        setMsg(null);
-                        setError(null);
-                      }}
-                      className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700"
-                    >
-                      <FontAwesomeIcon icon={faEye} />
-                      ดูรายละเอียด
-                    </button>
-                  </td>
-                </tr>
-              ))
+              filteredUsers
+                .slice()
+                .sort((a, b) => {
+                  const order: Record<string, number> = {
+                    admin: 0,
+                    manager: 1,
+                    staff: 2,
+                    customer: 3,
+                  };
+                  const ra = order[(a.role ?? "").toLowerCase()] ?? 99;
+                  const rb = order[(b.role ?? "").toLowerCase()] ?? 99;
+                  return ra !== rb
+                    ? ra - rb
+                    : (a.name ?? "").localeCompare(b.name ?? "");
+                })
+                .map((u) => (
+                  <tr key={u.id} className="border-t hover:bg-gray-50/60">
+                    <td className="px-4 py-3">
+                      {(() => {
+                        const role = (u.role ?? "").toLowerCase();
+                        const cfg =
+                          role === "admin"
+                            ? {
+                                cls: "bg-indigo-50 text-indigo-700 ring-indigo-200",
+                                icon: faCrown,
+                              }
+                            : role === "manager"
+                            ? {
+                                cls: "bg-pink-50 text-pink-700 ring-pink-200",
+                                icon: faUserTie,
+                              }
+                            : role === "staff"
+                            ? {
+                                cls: "bg-amber-50 text-amber-700 ring-amber-200",
+                                icon: faUserGear,
+                              }
+                            : {
+                                cls: "bg-gray-100 text-gray-700 ring-gray-200",
+                                icon: faUser,
+                              };
+
+                        return (
+                          <span
+                            className={[
+                              "inline-flex items-center gap-1.5 rounded-full px-2 py-1 text-xs ring-1",
+                              cfg.cls,
+                            ].join(" ")}
+                          >
+                            <FontAwesomeIcon
+                              icon={cfg.icon}
+                              className="h-3.5 w-3.5"
+                            />
+                            <span className="capitalize">{role || "-"}</span>
+                          </span>
+                        );
+                      })()}
+                    </td>
+
+                    <td className="px-4 py-3">{u.name ?? "-"}</td>
+                    <td className="px-4 py-3">{u.email ?? "-"}</td>
+                    <td className="px-4 py-3">{u.phone ?? "-"}</td>
+                    <td className="px-4 py-3 font-mono text-[11px] text-gray-600">
+                      {u.id}
+                    </td>
+                    <td className="px-5 py-4">
+                      <button
+                        onClick={() => {
+                          setDetailUser(u);
+                          setDetailOpen(true);
+                          setMsg(null);
+                          setError(null);
+                        }}
+                         className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 whitespace-nowrap"
+                      >
+                        <FontAwesomeIcon icon={faEye} />
+                        ดูรายละเอียด
+                      </button>
+                    </td>
+                  </tr>
+                ))
             )}
           </tbody>
         </table>

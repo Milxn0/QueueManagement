@@ -1,5 +1,5 @@
 export type StatusKey =
-  | "pending"
+  | "waiting"
   | "confirmed"
   | "confirm"
   | "seated"
@@ -7,7 +7,7 @@ export type StatusKey =
   | "canceled";
 
 const STATUS: Record<string, { badge: string; label: string }> = {
-  pending: { badge: "bg-amber-100 text-amber-700", label: "Pending" },
+  waiting: { badge: "bg-amber-100 text-amber-700", label: "waiting" },
   confirm: { badge: "bg-indigo-100 text-indigo-700", label: "Confirmed" },
   confirmed: { badge: "bg-indigo-100 text-indigo-700", label: "Confirmed" },
   seated: { badge: "bg-emerald-100 text-emerald-700", label: "Seated" },

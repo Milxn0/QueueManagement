@@ -2,16 +2,22 @@ export type AppSettings = {
   is_system_open?: boolean | null;
   days_ahead?: number | null;
   open_time?: string | null;
-  close_time?: string | null; 
+  close_time?: string | null;
 };
 
-export function canModify(status: string | null) {
-  const v = (status ?? "").toLowerCase();
-  return v === "pending" || v === "confirmed" || v === "confirm";
+export function canModify(row: {
+  status?: unknown;
+  reservation_datetime?: unknown;
+}): boolean {
+  const s = normalizeStatus(row?.status);
+  return s === "waiting";
 }
 
 /** ตรวจว่าเวลาที่ผู้ใช้เลือกถูกกฎระบบหรือไม่ */
-export function validateReservationTime(settings: AppSettings | null | undefined, dateTime: string) {
+export function validateReservationTime(
+  settings: AppSettings | null | undefined,
+  dateTime: string
+) {
   if (!settings) {
     return { ok: false as const, msg: "ระบบกำลังโหลดการตั้งค่า กรุณาลองใหม่" };
   }
@@ -34,10 +40,14 @@ export function validateReservationTime(settings: AppSettings | null | undefined
 
   // จำกัดจำนวนวันล่วงหน้า
   const daysAhead = settings.days_ahead ?? 30;
-  const startOf = (x: Date) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const startOf = (x: Date) =>
+    new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
   const diffDays = Math.floor((startOf(d) - startOf(now)) / 86400000);
   if (diffDays > daysAhead) {
-    return { ok: false as const, msg: `จองล่วงหน้าได้ไม่เกิน ${daysAhead} วัน` };
+    return {
+      ok: false as const,
+      msg: `จองล่วงหน้าได้ไม่เกิน ${daysAhead} วัน`,
+    };
   }
 
   // อยู่ในช่วงเวลาเปิด-ปิดรายวัน
@@ -47,8 +57,26 @@ export function validateReservationTime(settings: AppSettings | null | undefined
   const openMin = (oh ?? 9) * 60 + (om ?? 0);
   const closeMin = (ch ?? 21) * 60 + (cm ?? 0);
   if (hh < openMin || hh > closeMin) {
-    return { ok: false as const, msg: `วันนี้เปิดให้จองระหว่าง ${settings.open_time ?? "09:00"} - ${settings.close_time ?? "21:00"}` };
+    return {
+      ok: false as const,
+      msg: `วันนี้เปิดให้จองระหว่าง ${settings.open_time ?? "09:00"} - ${
+        settings.close_time ?? "21:00"
+      }`,
+    };
   }
 
   return { ok: true as const };
+}
+export function normalizeStatus(status: unknown): string {
+  if (status == null) return "";
+  if (typeof status === "string") return status.toLowerCase();
+  try {
+    return String(status).toLowerCase();
+  } catch {
+    return "";
+  }
+}
+export function isCancelled(row: { status?: unknown }): boolean {
+  const s = normalizeStatus(row?.status);
+  return s.includes("cancel");
 }

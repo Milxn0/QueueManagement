@@ -15,7 +15,8 @@ import type { ReservationRow } from "@/types/reservationrow";
 import type { FilterKey } from "@/types/filters";
 import { FILTERS } from "@/utils/filters";
 import { OccupiedItem } from "@/types/reservationdetail";
-
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faClockRotateLeft } from "@fortawesome/free-solid-svg-icons/faClockRotateLeft";
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
@@ -264,13 +265,14 @@ export default function ManageQueuesPage() {
           <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
             <div className="p-6">
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-                Queue-Management
+                <FontAwesomeIcon icon={faClockRotateLeft} />
+                Queue-History
               </div>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
-                จัดการคิวทั้งหมด
+                ประวัตการจองคิวทั้งหมด
               </h1>
               <p className="mt-1 text-sm text-gray-600">
-                ดูคิวทั้งหมด / เลือกเดือน / ปี / ที่ยกเลิก + ค้นหา
+                ดูคิวทั้งหมด / เลือกเดือน / ปี
               </p>
             </div>
           </div>

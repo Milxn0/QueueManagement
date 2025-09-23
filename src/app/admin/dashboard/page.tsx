@@ -13,6 +13,8 @@ import { toISO as iso, formatDateTh as formatDate } from "@/utils/date";
 import { assignTable, moveTable } from "@/lib/reservations";
 import type { ReservationRow } from "@/types/reservationrow";
 import { OccupiedItem } from "@/types/reservationdetail";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faListCheck } from "@fortawesome/free-solid-svg-icons/faListCheck";
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
@@ -205,13 +207,14 @@ export default function TodayQueuePage() {
           <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
             <div className="p-6">
               <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-                Today-Queue-Management
+                <FontAwesomeIcon icon={faListCheck} />
+                Queue-Management
               </div>
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
                 คิววันนี้
               </h1>
               <p className="mt-1 text-sm text-gray-600">
-                ยืนยันและแก้ไขคิววันนี้
+                จัดการคิววันนี้
               </p>
             </div>
           </div>

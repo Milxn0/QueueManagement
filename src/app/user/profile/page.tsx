@@ -5,6 +5,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 import type { UserRow } from "@/types/userrow";
+import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
+import { faUser } from "@fortawesome/free-regular-svg-icons/faUser";
 
 export default function ProfilePage() {
   const supabase = createClient();
@@ -103,7 +105,8 @@ export default function ProfilePage() {
       <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
         <div className="p-6">
           <div className="inline-flex items-center gap-2 rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700 ring-1 ring-indigo-100">
-            โปรไฟล์ผู้ใช้
+            <FontAwesomeIcon icon={faUser} />
+            Profile
           </div>
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
             ข้อมูลส่วนตัว

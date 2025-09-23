@@ -15,7 +15,7 @@ export type UserReservationRow = {
 };
 
 // สถานะการจอง
-const PENDING_STATUSES = ["pending"];
+const waiting_STATUSES = ["waiting"];
 const CONFIRMED_STATUSES = ["confirmed", "seated", "completed"];
 const CANCELLED_STATUSES = ["cancelled", "no_show"];
 
@@ -118,18 +118,18 @@ export async function listReservationsByUser(sb: unknown, userId: string) {
 }
 
 
-export async function listUserPendingReservations(sb: unknown, userId: string) {
+export async function listUserwaitingReservations(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("reservations")
     .select("id, reservation_datetime, status, queue_code")
     .eq("user_id", userId)
-    .in("status", [...PENDING_STATUSES, ...CONFIRMED_STATUSES])
+    .in("status", [...waiting_STATUSES, ...CONFIRMED_STATUSES])
     .order("reservation_datetime", { ascending: true })
     .limit(50);
 
   if (error) {
-    console.error("[listUserPendingReservations]", error);
+    console.error("[listUserwaitingReservations]", error);
     return [];
   }
   return data ?? [];
@@ -152,7 +152,7 @@ export async function checkUserReservationQuota(
     .eq("user_id", userId)
     .gte("reservation_datetime", start.toISOString())
     .lte("reservation_datetime", end.toISOString())
-    .in("status", [...PENDING_STATUSES, ...CONFIRMED_STATUSES]);
+    .in("status", [...waiting_STATUSES, ...CONFIRMED_STATUSES]);
 
   if (error) {
     console.error("[checkUserReservationQuota]", error);
