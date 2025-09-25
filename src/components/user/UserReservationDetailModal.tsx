@@ -5,7 +5,11 @@
 
 import { useEffect, useState } from "react";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
-import { faXmark, faCircleCheck, faInfo } from "@fortawesome/free-solid-svg-icons";
+import {
+  faXmark,
+  faCircleCheck,
+  faInfo,
+} from "@fortawesome/free-solid-svg-icons";
 import { statusClass } from "@/utils/status";
 import { toLocalInputValue, localInputToISO } from "@/utils/date";
 
@@ -193,12 +197,12 @@ export default function UserReservationDetailModal({
 
       {/* Dialog */}
       <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
-        {/* Header (match ดีไซน์ตัวอย่าง) */}
+        {/* Header */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4">
           <div className="flex items-start justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-100">
-              <FontAwesomeIcon icon={faInfo} />
+                <FontAwesomeIcon icon={faInfo} />
                 รายละเอียดคิว
               </div>
               <h3 className="mt-2 text-lg font-semibold text-gray-900">

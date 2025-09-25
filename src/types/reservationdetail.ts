@@ -21,7 +21,7 @@ export type Props = {
   open: boolean;
   row: ReservationForDetail | null;
   onClose: () => void;
-
+  onUpdated?: () => void;
   // actions
   onConfirm: (id: string) => Promise<void> | void;
   onCancel: (id: string, reason: string) => Promise<void> | void;

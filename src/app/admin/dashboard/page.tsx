@@ -213,9 +213,7 @@ export default function TodayQueuePage() {
               <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
                 คิววันนี้
               </h1>
-              <p className="mt-1 text-sm text-gray-600">
-                จัดการคิววันนี้
-              </p>
+              <p className="mt-1 text-sm text-gray-600">จัดการคิววันนี้</p>
             </div>
           </div>
         </section>
@@ -232,8 +230,8 @@ export default function TodayQueuePage() {
               <thead className="bg-gray-50 text-gray-600">
                 <tr>
                   <th className="px-4 py-3 text-left">คิว</th>
-                  <th className="px-4 py-3 text-left">วัน-เวลา</th>
                   <th className="px-4 py-3 text-left">ลูกค้า</th>
+                  <th className="px-4 py-3 text-left">วัน-เวลา</th>
                   <th className="px-4 py-3 text-left">จำนวน</th>
                   <th className="px-4 py-3 text-left">สถานะ</th>
                   <th className="px-4 py-3 text-left">การจัดการ</th>
@@ -251,6 +249,7 @@ export default function TodayQueuePage() {
         </section>
 
         <ReservationDetailModal
+          key={detailRow?.id || "empty"}
           open={!!detailRow}
           row={detailRow}
           onClose={() => setDetailRow(null)}
@@ -268,12 +267,13 @@ export default function TodayQueuePage() {
                 cancelled_at: new Date().toISOString(),
               })
               .eq("id", id);
-            scheduleRefetch();
+            fetchReservations();
           }}
           currentTableNo={currentTableNo}
           onAssignTable={handleAssignTable}
           onMoveTable={handleMoveTable}
           occupied={occupied}
+          onUpdated={fetchReservations}
         />
       </main>
     </div>
