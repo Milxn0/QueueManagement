@@ -203,7 +203,7 @@ export default function ReservationPage() {
               href="/"
               className="rounded-xl bg-indigo-600 text-white px-4 py-2 hover:bg-indigo-700"
             >
-              ดูคิวทั้งปัจจุบัน
+              ดูคิวทั้งหมดในปัจจุบัน
             </Link>{" "}
             <Link
               href="/user/queue-history"

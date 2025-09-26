@@ -9,7 +9,6 @@ import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/admin/ReservationDetailModal";
 import ManageQueueTable from "@/components/admin/ManageQueueTable";
 import { parseTableNo } from "@/utils/tables";
-import { statusClass } from "@/utils/status";
 import { assignTable, moveTable } from "@/lib/reservations";
 import type { ReservationRow } from "@/types/reservationrow";
 import type { FilterKey } from "@/types/filters";

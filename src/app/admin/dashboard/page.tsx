@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
@@ -9,14 +8,14 @@ import { createClient } from "@/lib/supabaseClient";
 import ReservationDetailModal from "@/components/admin/ReservationDetailModal";
 import TodayQueueTable from "@/components/admin/TodayQueueTable";
 import { parseTableNo } from "@/utils/tables";
-import { toISO as iso, formatDateTh as formatDate } from "@/utils/date";
 import { assignTable, moveTable } from "@/lib/reservations";
 import type { ReservationRow } from "@/types/reservationrow";
 import { OccupiedItem } from "@/types/reservationdetail";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faListCheck } from "@fortawesome/free-solid-svg-icons/faListCheck";
-
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+import StatusFilter from "@/components/admin/StatusFilter";
+import type { StatusKey } from "@/types/filters";
+import { useSearchParams } from "next/navigation";
 
 export default function TodayQueuePage() {
   const supabase = useMemo(() => createClient(), []);
@@ -38,18 +37,12 @@ export default function TodayQueuePage() {
     return () => sub.subscription.unsubscribe();
   }, [supabase]);
 
-  // ---------- Date helpers ----------
-  const startEndToday = useCallback(() => {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = now.getMonth();
-    const startOfDay = new Date(y, m, now.getDate(), 0, 0, 0, 0);
-    const endOfDay = new Date(y, m, now.getDate(), 23, 59, 59, 999);
-  }, []);
-
   // ---------- Reservations (วันนี้เท่านั้น) ----------
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
+  const sp = useSearchParams();
+  const statusParam = (sp?.get?.("status") as StatusKey | "") || "";
+  const filteredRows = filterByStatus(rows, statusParam);
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
@@ -156,6 +149,24 @@ export default function TodayQueuePage() {
 
     setOccupied(occ);
   }, []);
+  function normalize(s: string | null | undefined) {
+    const v = (s ?? "").toLowerCase().trim();
+    if (v.includes("cancel")) return "cancelled";
+    if (v.startsWith("seat")) return "seated";
+    if (v.startsWith("confirm")) return "confirmed";
+    if (v.startsWith("paid") || v.startsWith("pay")) return "paid";
+    if (v.startsWith("wait")) return "waiting";
+    return v;
+  }
+  function filterByStatus<T extends { status?: string | null }>(
+    row: T[],
+    key: StatusKey | "" | undefined
+  ) {
+    if (!key) return row;
+    const k = normalize(key);
+    return row.filter((r) => normalize(r.status) === k);
+  }
+  const shownCount = filteredRows.length;
 
   // ---------- UI ----------
   if (loading) {
@@ -219,15 +230,27 @@ export default function TodayQueuePage() {
         </section>
 
         <section className="bg-white rounded-2xl shadow-xl border">
-          <div className="p-4 flex flex-wrap items-center gap-2 border-b">
-            <div className="ml-auto text-sm text-gray-500">
-              แสดง {rows.length} รายการ (วันนี้)
+          <div className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b">
+            <div className="text-sm text-gray-600">
+              <div className="font-medium text-gray-900">คิววันนี้</div>
+              <div className="mt-0.5">
+                แสดง{" "}
+                <span className="font-semibold text-gray-900">
+                  {shownCount}
+                </span>{" "}
+                รายการ
+                <span className="text-gray-400"> / ทั้งหมด {rows.length}</span>
+              </div>
+            </div>
+
+            <div className="w-full md:w-auto">
+              <StatusFilter />
             </div>
           </div>
 
           <div className="overflow-x-auto ">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-gray-600">
+              <thead className="bg-gray-50/90 text-gray-600 sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-gray-50/70">
                 <tr>
                   <th className="px-4 py-3 text-left">คิว</th>
                   <th className="px-4 py-3 text-left">ลูกค้า</th>
@@ -239,11 +262,23 @@ export default function TodayQueuePage() {
               </thead>
 
               <TodayQueueTable
-                rows={rows}
+                rows={filteredRows}
                 onOpenDetail={openDetail}
                 onConfirm={confirmReservation}
                 rowsLoading={rowsLoading}
               />
+              {!rowsLoading && shownCount === 0 && (
+                <tbody>
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="px-6 py-10 text-center text-sm text-gray-500"
+                    >
+                      ไม่พบรายการตามตัวกรอง ลองเลือกสถานะอื่น หรือกด “ทั้งหมด”
+                    </td>
+                  </tr>
+                </tbody>
+              )}
             </table>
           </div>
         </section>

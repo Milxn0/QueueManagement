@@ -62,7 +62,7 @@ export default function HistoryTable({ rows, onOpenDetail }: Props) {
               <th className="px-5 py-4 font-semibold">สถานะ</th>
               <th className="px-5 py-4 font-semibold min-w-[160px]">
                 การจัดการ
-              </th>{" "}
+              </th>
             </tr>
           </thead>
 

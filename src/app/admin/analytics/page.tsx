@@ -72,7 +72,7 @@ export default function AnalyticsPage() {
 
   // ---------- Export controls ----------
   const today = new Date();
-  const defaultDay = today.toISOString().slice(0, 10); 
+  const defaultDay = today.toISOString().slice(0, 10);
   const defaultMonth = defaultDay.slice(0, 7);
   const defaultYear = String(today.getFullYear());
 
@@ -164,8 +164,7 @@ export default function AnalyticsPage() {
 
   // ----- สร้างซีรีส์สำหรับกราฟเส้นจาก rows -----
   const { series, maxY, totals } = useMemo(() => {
-    const waiting = new Array(daysInMonth).fill(0);
-    const confirmed = new Array(daysInMonth).fill(0);
+    const paid = new Array(daysInMonth).fill(0);
     const cancelled = new Array(daysInMonth).fill(0);
     const all = new Array(daysInMonth).fill(0);
 
@@ -178,27 +177,22 @@ export default function AnalyticsPage() {
       const s = (r.status ?? "").toLowerCase();
       all[dayIdx]++;
 
-      if (s === "waiting") waiting[dayIdx]++;
+      if (s === "paid") paid[dayIdx]++;
       else if (s === "cancelled" || s === "no_show") cancelled[dayIdx]++;
-      else if (s === "confirmed" || s === "seated" || s === "completed")
-        confirmed[dayIdx]++;
-      else confirmed[dayIdx]++;
     }
 
-    const m = Math.max(5, ...waiting, ...confirmed, ...cancelled, ...all);
+    const m = Math.max(5, ...paid, ...cancelled, ...all);
 
     return {
       series: [
         { name: "ทั้งหมด", color: "#0ea5e9", values: all },
-        { name: "ยืนยันแล้ว", color: "#22c55e", values: confirmed },
-        { name: "รอคอนเฟิร์ม", color: "#f59e0b", values: waiting },
-        { name: "ยกเลิก/ไม่มา", color: "#ef4444", values: cancelled },
+        { name: "จ่ายแล้ว", color: "#22c55e", values: paid },
+        { name: "ยกเลิก", color: "#ef4444", values: cancelled },
       ] as LineSeries[],
       maxY: m,
       totals: {
         all: all.reduce((a, b) => a + b, 0),
-        confirmed: confirmed.reduce((a, b) => a + b, 0),
-        waiting: waiting.reduce((a, b) => a + b, 0),
+        paid: paid.reduce((a, b) => a + b, 0),
         cancelled: cancelled.reduce((a, b) => a + b, 0),
       },
     };
@@ -296,24 +290,19 @@ export default function AnalyticsPage() {
       </section>
 
       {/* quick summary */}
-      <section className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+      <section className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <SummaryCard
           label="คิวทั้งหมด"
           value={totals.all}
           className="bg-sky-50 text-sky-700"
         />
         <SummaryCard
-          label="ยืนยันแล้ว"
-          value={totals.confirmed}
+          label="จ่ายแล้ว"
+          value={totals.paid}
           className="bg-emerald-50 text-emerald-700"
         />
         <SummaryCard
-          label="รอคอนเฟิร์ม"
-          value={totals.waiting}
-          className="bg-amber-50 text-amber-700"
-        />
-        <SummaryCard
-          label="ยกเลิก/ไม่มา"
+          label="ยกเลิก"
           value={totals.cancelled}
           className="bg-rose-50 text-rose-700"
         />

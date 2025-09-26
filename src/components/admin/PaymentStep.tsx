@@ -19,6 +19,7 @@ type Props = {
   open: boolean;
   onClose: () => void;
   onSaved: (payload: {
+    paymentMethod: null;
     selectedPackage: number | null;
     people: number;
     alaItems: AlaItem[];
@@ -159,7 +160,13 @@ export default function PaymentStep({
       setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
       return;
     }
-    onSaved({ selectedPackage, people, alaItems, totals });
+    onSaved({
+      selectedPackage,
+      people,
+      alaItems,
+      totals,
+      paymentMethod: null,
+    });
   };
 
   // ---------- UI ----------

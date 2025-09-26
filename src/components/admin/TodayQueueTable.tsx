@@ -52,11 +52,7 @@ export default function TodayQueueTable({
         </tbody>
       ) : rows.length === 0 ? (
         <tbody>
-          <tr>
-            <td colSpan={8} className="px-6 py-12 text-center text-gray-500">
-              ไม่พบข้อมูล
-            </td>
-          </tr>
+
         </tbody>
       ) : (
         <tbody className="divide-y divide-gray-100">

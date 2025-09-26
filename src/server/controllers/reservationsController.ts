@@ -82,6 +82,7 @@ export async function getOccupiedAround(
     )
     .not("table_id", "is", null)
     .neq("id", reservationId)
+    .eq("status", "seated")
     .gte("reservation_datetime", start)
     .lte("reservation_datetime", end);
 
