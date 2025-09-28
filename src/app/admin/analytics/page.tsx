@@ -396,11 +396,10 @@ export default function AnalyticsPage() {
               Analytics
             </div>
             <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
-              สถิติของระบบ (รวมทุกอย่างไว้ในที่เดียว)
+              สถิติของระบบ
             </h1>
             <p className="mt-1 text-sm text-gray-600">
               เลือก “มุมมองข้อมูล”, เดือน, และพิมพ์ชื่อ
-              (ถ้าต้องการดูเฉพาะคนเดียว)
             </p>
           </div>
           <div className="hidden md:flex items-center gap-2">
