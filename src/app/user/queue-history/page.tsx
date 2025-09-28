@@ -65,6 +65,7 @@ export default function UserReservationHistoryPage() {
   const [detailRow, setDetailRow] = useState<DetailRow | null>(null);
 
   // refetch with join table for table_name
+  // GET อ่านข้อมูลการจองของ user คนที่ login อยู่
   async function refetch() {
     if (!me?.id) return;
     const { data, error: qErr } = await supabase
@@ -101,6 +102,7 @@ export default function UserReservationHistoryPage() {
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
 
   // modal handlers
+  // PUT ยกเลิกการจอง (เเก้ไขสถานะเป็น cancelled)
   async function handleSubmitEdit(id: string, iso: string, size: number) {
     if (!me?.id) return;
     await updateReservationByUser(id, me.id, iso, size);
