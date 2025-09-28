@@ -12,6 +12,8 @@ type Reservation = {
   user_id: string | null;
   reservation_datetime: string;
   queue_code: string | null;
+  status: string | null;
+  created_at: string | null;
 };
 
 export default function HomePage() {
@@ -20,7 +22,11 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
-  const [allQueues, setAllQueues] = useState<Reservation[]>([]);
+
+  // คิวของฉัน
+  const [myReservations, setMyReservations] = useState<Reservation[]>([]);
+  // คิวถัดไป (เฉพาะ confirmed)
+  const [confirmedQueues, setConfirmedQueues] = useState<Reservation[]>([]);
 
   useEffect(() => {
     let mounted = true;
@@ -29,21 +35,44 @@ export default function HomePage() {
       setErr(null);
       setLoading(true);
       try {
+        // 1) ผู้ใช้ปัจจุบัน
         const { data: u } = await supabase.auth.getUser();
         const uid = u.user?.id ?? null;
         if (mounted) setUserId(uid);
 
         const nowIso = new Date().toISOString();
-        const { data, error } = await supabase
+
+        // 2) คิวของฉัน (ทั้งหมดที่ยังไม่ถึงเวลา)
+        if (uid) {
+          const { data: mine, error: mineErr } = await supabase
+            .from("reservations")
+            .select(
+              "id,user_id,reservation_datetime,queue_code,status,created_at"
+            )
+            .eq("user_id", uid)
+            .gte("reservation_datetime", nowIso)
+            .order("reservation_datetime", { ascending: true })
+            .order("created_at", { ascending: true });
+
+          if (mineErr) throw mineErr;
+          if (mounted) setMyReservations(mine ?? []);
+        } else {
+          if (mounted) setMyReservations([]);
+        }
+
+        // 3) คิวถัดไป (เฉพาะ confirmed)
+        const { data: conf, error: confErr } = await supabase
           .from("reservations")
-          .select("id,user_id,reservation_datetime,queue_code")
-          .eq("status", "waiting")
+          .select(
+            "id,user_id,reservation_datetime,queue_code,status,created_at"
+          )
+          .eq("status", "confirmed")
           .gte("reservation_datetime", nowIso)
           .order("reservation_datetime", { ascending: true })
           .order("created_at", { ascending: true });
 
-        if (error) throw error;
-        if (mounted) setAllQueues(data ?? []);
+        if (confErr) throw confErr;
+        if (mounted) setConfirmedQueues(conf ?? []);
       } catch (e: any) {
         if (mounted) setErr(e?.message || "โหลดข้อมูลไม่สำเร็จ");
       } finally {
@@ -53,33 +82,29 @@ export default function HomePage() {
 
     load();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_e: any, session: { user: { id: any } }) => {
-        setUserId(session?.user?.id ?? null);
-      }
-    );
+    const { data: auth } = supabase.auth.onAuthStateChange((_e: any, s: { user: { id: any; }; }) => {
+      setUserId(s?.user?.id ?? null);
+    });
 
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
+      auth?.subscription?.unsubscribe();
     };
   }, [supabase]);
 
-  const myReservation = useMemo(() => {
-    if (!userId) return null;
-    return allQueues.find((q) => q.user_id === userId) ?? null;
-  }, [allQueues, userId]);
-
-  const otherQueues = useMemo(() => {
-    if (!myReservation) return allQueues;
-    return allQueues.filter((q) => q.id !== myReservation.id);
-  }, [allQueues, myReservation]);
-
-  const myIndex = useMemo(() => {
-    if (!myReservation) return null;
-    const idx = allQueues.findIndex((q) => q.id === myReservation.id);
+  // หาตำแหน่งฉันในลิสต์ confirmed
+  const getMyIndex = (r: Reservation) => {
+    if ((r.status ?? "").toLowerCase() !== "confirmed") return null;
+    const idx = confirmedQueues.findIndex((q) => q.id === r.id);
     return idx >= 0 ? idx : null;
-  }, [allQueues, myReservation]);
+  };
+
+  // คิวถัดไป
+  const otherQueues = useMemo(() => {
+    if (myReservations.length === 0) return confirmedQueues;
+    const mineIds = new Set(myReservations.map((m) => m.id));
+    return confirmedQueues.filter((q) => !mineIds.has(q.id));
+  }, [confirmedQueues, myReservations]);
 
   const fmtTime = (iso?: string | null) => {
     if (!iso) return "-";
@@ -115,7 +140,8 @@ export default function HomePage() {
 
       {/* คิวของฉัน */}
       <section className="space-y-4">
-        <h2 className="text-lg font-medium ">คิวของฉัน</h2>
+        <h2 className="text-lg font-medium">คิวของฉัน</h2>
+
         {!userId && (
           <div className="rounded-xl border px-4 py-5 bg-gray-50">
             <p className="text-sm">
@@ -130,7 +156,7 @@ export default function HomePage() {
 
         {userId && (
           <>
-            {!myReservation ? (
+            {myReservations.length === 0 ? (
               <div className="rounded-xl border px-4 py-5 bg-gray-50">
                 <p className="text-sm">
                   ตอนนี้คุณยังไม่มีคิว —{" "}
@@ -144,32 +170,46 @@ export default function HomePage() {
                 </p>
               </div>
             ) : (
-              <div className="rounded-xl border px-4 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white shadow-sm">
-                <div>
-                  <p className="text-sm text-gray-500">Queue Code</p>
-                  <p className="text-2xl font-semibold text-indigo-600">
-                    {myReservation.queue_code ?? "-"}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">วันเวลา</p>
-                  <p className="font-medium">
-                    {fmtTime(myReservation.reservation_datetime)}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm text-gray-500">ถึงคิวฉันในอีก</p>
-                  <p className="text-lg font-semibold text-emerald-600">
-                    {typeof myIndex === "number" ? `${myIndex} คิว` : "-"}
-                  </p>
-                </div>
-              </div>
+              <ul className="space-y-3">
+                {myReservations.map((r) => {
+                  const idx = getMyIndex(r);
+                  return (
+                    <li
+                      key={r.id}
+                      className="rounded-xl border px-4 py-5 flex flex-col sm:flex-row sm:items-center sm:justify-between bg-white shadow-sm"
+                    >
+                      <div>
+                        <p className="text-sm text-gray-500">Queue Code</p>
+                        <p className="text-2xl font-semibold text-indigo-600">
+                          {r.queue_code ?? "-"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">วันเวลา</p>
+                        <p className="font-medium">
+                          {fmtTime(r.reservation_datetime)}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">ถึงคิวฉันในอีก</p>
+                        <p className="text-lg font-semibold text-emerald-600">
+                          {(r.status ?? "").toLowerCase() === "waiting"
+                            ? "รอพนักงานคอนเฟิร์ม"
+                            : typeof idx === "number"
+                            ? `${idx} คิว`
+                            : "-"}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
             )}
           </>
         )}
       </section>
 
-      {/* คิวทั้งหมด */}
+      {/* คิวถัดไป (เฉพาะที่ยืนยันแล้ว) */}
       <section className="space-y-4">
         <h2 className="text-lg font-medium">คิวถัดไป</h2>
 
@@ -179,7 +219,7 @@ export default function HomePage() {
           </div>
         ) : otherQueues.length === 0 ? (
           <div className="rounded-xl border px-4 py-5 text-sm text-gray-500">
-            ยังไม่มีคิวถัดไป
+            ยังไม่มีคิวถัดไป (ที่ยืนยันแล้ว)
           </div>
         ) : (
           <ul className="divide-y rounded-xl border overflow-hidden">

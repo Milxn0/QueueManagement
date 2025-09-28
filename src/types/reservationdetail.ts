@@ -1,4 +1,6 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 export type ReservationForDetail = {
+  cancelled_by_user_id: any;
   id: string;
   queue_code: string | null;
   reservation_datetime: string | null;

@@ -16,6 +16,8 @@ import type { OccupiedItem, Props } from "@/types/reservationdetail";
 import { useRouter } from "next/navigation";
 import PaymentStep from "@/components/admin/PaymentStep";
 import { statusClass } from "@/utils";
+import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
+
 const TH_TZ = "Asia/Bangkok";
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
@@ -233,6 +235,10 @@ export default function ReservationDetailModal({
     currentTableNo ?? null
   );
 
+  const [confirmDelOpen, setConfirmDelOpen] = useState(false);
+  const [delBusy, setDelBusy] = useState(false);
+  const [delErr, setDelErr] = useState<string | null>(null);
+
   const [ok, setOk] = useState<string | null>(null);
   const [displayDatetime, setDisplayDatetime] = useState<string | null>(
     row?.reservation_datetime ?? null
@@ -259,6 +265,25 @@ export default function ReservationDetailModal({
     (occupied ?? []).forEach((o) => m.set(o.tableNo, o));
     return m;
   }, [occupied]);
+
+  const [isAdmin, setIsAdmin] = useState(false);
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data: auth } = await supabase.auth.getUser();
+        const uid = auth.user?.id;
+        if (!uid) return;
+        const { data: u } = await supabase
+          .from("users")
+          .select("role")
+          .eq("id", uid)
+          .single();
+        setIsAdmin((u?.role ?? "").toLowerCase() === "admin");
+      } catch {
+        setIsAdmin(false);
+      }
+    })();
+  }, []);
 
   useEffect(() => {
     setLocalStatus((row?.status ?? "").toLowerCase());
@@ -430,6 +455,56 @@ export default function ReservationDetailModal({
     (s, it) => s + (it.qty ?? 0),
     0
   );
+
+  const hasAnyBillItems =
+    !!payment &&
+    ((payment.packageQty ?? 0) > 0 || (payment.alaItems?.length ?? 0) > 0);
+
+  const AUTO_CANCEL_UUID = "00000000-0000-0000-0000-000000000001";
+
+  const handleDeleteReservation = async () => {
+    if (!isAdmin || !row?.id) return;
+    try {
+      setDelBusy(true);
+      setDelErr(null);
+
+      const { data: bills } = await supabase
+        .from("bills")
+        .select("id")
+        .eq("reservation_id", row.id);
+
+      const billIds = (bills ?? []).map((b: any) => b.id);
+      if (billIds.length > 0) {
+        const { error: delItemsErr } = await supabase
+          .from("bill_items")
+          .delete()
+          .in("bill_id", billIds);
+        if (delItemsErr) throw delItemsErr;
+
+        const { error: delBillsErr } = await supabase
+          .from("bills")
+          .delete()
+          .in("id", billIds);
+        if (delBillsErr) throw delBillsErr;
+      }
+
+      const { error } = await supabase
+        .from("reservations")
+        .delete()
+        .eq("id", row.id);
+      if (error) throw error;
+
+      onUpdated?.();
+
+      setConfirmDelOpen(false);
+      handleClose();
+    } catch (e: any) {
+      setDelErr(e?.message || "ลบไม่สำเร็จ");
+    } finally {
+      setDelBusy(false);
+    }
+  };
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center"
@@ -545,10 +620,10 @@ export default function ReservationDetailModal({
                     <button
                       type="button"
                       onClick={() => setShowPkg((v) => !v)}
-                      disabled={!payment || payment.packageQty === 0}
+                      disabled={!hasAnyBillItems}
                       className="text-[11px] font-medium text-emerald-700 hover:underline disabled:text-emerald-300"
                     >
-                      ดูรายละเอียดแพ็กเกจ
+                      ดูรายละเอียด
                     </button>
                   </div>
                   <div className="mt-1">
@@ -690,7 +765,9 @@ export default function ReservationDetailModal({
                   <div>
                     <span className="text-red-700">บทบาทผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {capitalize(row.cancelled_by?.role)}
+                      {row.cancelled_by_user_id === AUTO_CANCEL_UUID
+                        ? "ระบบอัตโนมัติ"
+                        : capitalize(row.cancelled_by?.role) || "—"}
                     </span>
                   </div>
 
@@ -698,7 +775,9 @@ export default function ReservationDetailModal({
                   <div>
                     <span className="text-red-700">ชื่อผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {row.cancelled_by?.name?.trim() || "—"}
+                      {row.cancelled_by_user_id === AUTO_CANCEL_UUID
+                        ? "ระบบอัตโนมัติ"
+                        : row.cancelled_by?.name?.trim() || "—"}
                     </span>
                   </div>
 
@@ -861,7 +940,32 @@ export default function ReservationDetailModal({
             )}
 
             {/* Actions */}
-            {!readOnly &&
+            {fromManageQueue ? (
+              <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDelErr(null);
+                      setConfirmDelOpen(true);
+                    }}
+                    className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50 disabled:opacity-60"
+                    disabled={busy}
+                    title="ลบการจองนี้"
+                  >
+                    ลบการจอง
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handleClose}
+                  className="ml-auto rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
+                >
+                  ปิด
+                </button>
+              </div>
+            ) : (
+              !readOnly &&
               tableStep === 0 &&
               cancelStep === 0 &&
               editStep === 0 && (
@@ -953,12 +1057,13 @@ export default function ReservationDetailModal({
                   <button
                     type="button"
                     onClick={handleClose}
-                    className="ml-auto rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
+                    className="ml-auto rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadowsm transition hover:bg-gray-50"
                   >
                     ปิด
                   </button>
                 </div>
-              )}
+              )
+            )}
 
             {/* Cancel reason form */}
             {!readOnly && cancelStep === 1 && tableStep === 0 && (
@@ -1138,6 +1243,70 @@ export default function ReservationDetailModal({
             }
           }}
         />
+
+        {/* Confirm Delete Modal*/}
+        {confirmDelOpen && (
+          <div className="absolute inset-0 z-[70] flex items-center justify-center">
+            <div
+              className="absolute inset-0 bg-black/30"
+              onClick={() => setConfirmDelOpen(false)}
+            />
+            <div className="relative w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-rose-100">
+              <div className="flex items-start gap-3 border-b bg-rose-50 px-5 py-4">
+                <div className="mt-1 rounded-full bg-rose-100 p-2 text-rose-700">
+                  <FontAwesomeIcon icon={faTriangleExclamation} />
+                </div>
+                <div>
+                  <h4 className="text-base font-semibold text-rose-800">
+                    ยืนยันการลบการจอง
+                  </h4>
+                  <p className="mt-0.5 text-xs text-rose-700/80">
+                    การลบจะลบข้อมูลที่เกี่ยวข้องทั้งหมด และไม่สามารถกู้คืนได้
+                  </p>
+                </div>
+              </div>
+
+              <div className="px-5 py-4 text-sm">
+                <div className="rounded-xl border border-rose-100 bg-rose-50/50 px-3 py-2 text-rose-900">
+                  <div>
+                    <span className="text-rose-700">รหัสคิว:</span>{" "}
+                    <span className="font-semibold">
+                      {row.queue_code ?? "—"}
+                    </span>
+                  </div>
+                  <div className="text-[12px] text-rose-700/70">
+                    ชื่อ: {row.user?.name ?? "—"}
+                  </div>
+                </div>
+
+                {delErr && (
+                  <div className="mt-3 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700">
+                    {delErr}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-end gap-2 border-t bg-gray-50 px-5 py-3">
+                <button
+                  type="button"
+                  onClick={() => setConfirmDelOpen(false)}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
+                  disabled={delBusy}
+                >
+                  ยกเลิก
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteReservation}
+                  className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-medium text-white hover:bg-rose-700 disabled:opacity-60"
+                  disabled={delBusy}
+                >
+                  {delBusy ? "กำลังลบ..." : "ลบเลย"}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

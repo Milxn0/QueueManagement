@@ -77,7 +77,13 @@ export default function LinesChart({
         {/* Y grid + labels */}
         {ticksY.map((v) => (
           <g key={`gy-${v}`}>
-            <line x1={pad.l} x2={pad.l + iw} y1={y(v)} y2={y(v)} stroke="#e5e7eb" />
+            <line
+              x1={pad.l}
+              x2={pad.l + iw}
+              y1={y(v)}
+              y2={y(v)}
+              stroke="#e5e7eb"
+            />
             <text
               x={pad.l - 8}
               y={y(v)}
@@ -166,7 +172,9 @@ export default function LinesChart({
 
         {hover !== null && (
           <div className="ml-auto rounded-xl border bg-white px-3 py-2 text-xs shadow-sm">
-            <div className="font-semibold text-gray-800">วันที่ {hover + 1}</div>
+            <div className="font-semibold text-gray-800">
+              วันที่ {hover + 1}
+            </div>
             {series.map((s) => (
               <div key={`tt-${s.name}`} className="flex items-center gap-2">
                 <span
@@ -174,7 +182,9 @@ export default function LinesChart({
                   style={{ backgroundColor: s.color }}
                 />
                 <span className="text-gray-700">{s.name}</span>
-                <span className="ml-2 font-medium text-gray-900">{s.values[hover] ?? 0}</span>
+                <span className="ml-2 font-medium text-gray-900">
+                  {s.values[hover] ?? 0}
+                </span>
               </div>
             ))}
           </div>

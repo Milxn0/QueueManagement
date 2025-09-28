@@ -16,9 +16,8 @@ export type UserReservationRow = {
 
 // สถานะการจอง
 const waiting_STATUSES = ["waiting"];
-const CONFIRMED_STATUSES = ["confirmed", "seated", "completed"];
-const CANCELLED_STATUSES = ["cancelled", "no_show"];
-
+const CONFIRMED_STATUSES = ["confirmed", "seated"];
+const CANCELLED_STATUSES = ["cancelled"];
 
 export async function listReservationsToday() {
   const supabase = createServiceClient();
@@ -26,7 +25,7 @@ export async function listReservationsToday() {
   start.setHours(0, 0, 0, 0);
   const end = new Date();
   end.setHours(23, 59, 59, 999);
-  
+
   const { data, error } = await supabase
     .from("reservations")
     .select(
@@ -48,22 +47,19 @@ export async function listReservationsToday() {
   return data ?? [];
 }
 
-
 export async function confirmReservation(id: string) {
   const supabase = createServiceClient();
   const { error } = await supabase
     .from("reservations")
     .update({ status: "confirmed" })
     .eq("id", id);
-    
+
   if (error) {
     throw error;
   }
-  
 
   revalidatePath("/");
 }
-
 
 export async function getOccupiedAround(
   reservationId: string,
@@ -92,7 +88,6 @@ export async function getOccupiedAround(
   return data ?? [];
 }
 
-
 export async function listReservationsByUser(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -118,7 +113,6 @@ export async function listReservationsByUser(sb: unknown, userId: string) {
   return (data ?? []) as unknown as UserReservationRow[];
 }
 
-
 export async function listUserwaitingReservations(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
@@ -136,7 +130,6 @@ export async function listUserwaitingReservations(sb: unknown, userId: string) {
   return data ?? [];
 }
 
-
 export async function checkUserReservationQuota(
   userId: string,
   dayISO: string,
@@ -144,8 +137,24 @@ export async function checkUserReservationQuota(
 ) {
   const supabase = createServiceClient();
   const d = new Date(dayISO);
-  const start = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-  const end = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  const start = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    0,
+    0,
+    0,
+    0
+  );
+  const end = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate(),
+    23,
+    59,
+    59,
+    999
+  );
 
   const { count, error } = await supabase
     .from("reservations")
