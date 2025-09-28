@@ -50,6 +50,7 @@ export default function HomePage() {
               "id,user_id,reservation_datetime,queue_code,status,created_at"
             )
             .eq("user_id", uid)
+            .in("status", ["waiting", "confirmed"])
             .gte("reservation_datetime", nowIso)
             .order("reservation_datetime", { ascending: true })
             .order("created_at", { ascending: true });
@@ -82,9 +83,11 @@ export default function HomePage() {
 
     load();
 
-    const { data: auth } = supabase.auth.onAuthStateChange((_e: any, s: { user: { id: any; }; }) => {
-      setUserId(s?.user?.id ?? null);
-    });
+    const { data: auth } = supabase.auth.onAuthStateChange(
+      (_e: any, s: { user: { id: any } }) => {
+        setUserId(s?.user?.id ?? null);
+      }
+    );
 
     return () => {
       mounted = false;
