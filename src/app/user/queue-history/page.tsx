@@ -118,7 +118,7 @@ export default function UserReservationHistoryPage() {
         cancelled_reason: reason || "—",
         cancelled_by_user_id: me.id,
         cancelled_at: new Date().toISOString(),
-      })
+      }) 
       .eq("id", id)
       .eq("user_id", me.id);
     if (err) {
