@@ -19,6 +19,7 @@ type RowLike = {
   queue_code: string | null;
   partysize: number | string | null;
   status: string | null;
+  comment: string | null;
   cancelled_reason?: string | null;
   cancelled_by_user_id?: string | null;
   cancelled_at?: string | null;
@@ -28,14 +29,12 @@ type RowLike = {
     role?: string | null;
   } | null;
 
-  // อาจชื่อคีย์ไม่เหมือนกันในแต่ละ query
   user?: { name?: string | null } | null;
   users?: { name?: string | null } | null;
-  tbl?: { table_name?: string | null } | null; // join tables
-  table_name?: string | null; // บางเคส select มาเป็นคอลัมน์ตรง
+  tbl?: { table_name?: string | null } | null;
+  table_name?: string | null;
   user_id?: string | null;
 
-  // fallback name field อื่น ๆ ที่บางเพจอาจมี
   name?: string | null;
   customer_name?: string | null;
   user_name?: string | null;
@@ -45,7 +44,12 @@ type Props = {
   open: boolean;
   row: RowLike;
   onClose: () => void;
-  onSubmitEdit: (id: string, iso: string, size: number) => Promise<void>;
+  onSubmitEdit: (
+    id: string,
+    iso: string,
+    size: number,
+    cmedit: string
+  ) => Promise<void>;
   onCancelWithReason: (id: string, reason: string) => Promise<void>;
   fallbackName?: string;
 };
@@ -68,7 +72,7 @@ function tableText(r: RowLike) {
   const s = (r?.status ?? "").toLowerCase();
   if (s.includes("seated")) return "นั่งแล้ว";
   if (s.includes("cancel")) return "ยกเลิกแล้ว";
-  if (s.includes("done")) return "เสร็จสิ้น";
+  if (s.includes("paid")) return "ชำระเงินแล้ว";
   return "ยังไม่มีโต๊ะ";
 }
 
@@ -91,10 +95,11 @@ export default function UserReservationDetailModal({
   // local display (optimistic)
   const [displayDatetime, setDisplayDatetime] = useState<string | null>(null);
   const [displaySize, setDisplaySize] = useState<number | string | null>(null);
-
+  const [displayComment, setDisplayComment] = useState<string | null>(null);
   // edit form
   const [editDateTime, setEditDateTime] = useState<string>("");
   const [editPartySize, setEditPartySize] = useState<number | string>("");
+  const [editComment, setEditComment] = useState<string>("");
 
   // cancel form
   const [cancelReason, setCancelReason] = useState<string>("");
@@ -107,6 +112,7 @@ export default function UserReservationDetailModal({
     if (!row || !open) return;
     setDisplayDatetime(row.reservation_datetime ?? null);
     setDisplaySize(row.partysize ?? null);
+    setDisplayComment(row.comment ?? null);
     setEditDateTime(
       row.reservation_datetime
         ? toLocalInputValue(row.reservation_datetime, TH_TZ) ?? ""
@@ -117,6 +123,7 @@ export default function UserReservationDetailModal({
         ? row.partysize
         : Number(row.partysize || 1)
     );
+    setEditComment(row?.comment ?? "");
     setCancelReason(row.cancelled_reason ?? "");
     setEditStep(0);
     setCancelStep(0);
@@ -142,16 +149,18 @@ export default function UserReservationDetailModal({
     if (!allowEdit || busy) return;
     const iso = localInputToISO(editDateTime);
     const size = Number(editPartySize);
+    const cmedit = editComment;
     if (!Number.isFinite(size) || size <= 0) {
       alert("จำนวนคนต้องเป็นตัวเลขมากกว่า 0");
       return;
     }
     try {
       setBusy(true);
-      await onSubmitEdit(row.id, iso, size);
+      await onSubmitEdit(row.id, iso, size, cmedit);
       // optimistic UI
       setDisplayDatetime(iso);
       setDisplaySize(size);
+      setDisplayComment(cmedit);
       setEditStep(0);
       setOk("บันทึกสำเร็จ");
       setTimeout(() => setOk(null), 1600);
@@ -267,6 +276,12 @@ export default function UserReservationDetailModal({
                 {row?.tbl?.table_name || row?.table_name || "ยังไม่มีโต๊ะ"}
               </div>
             </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
+              <div className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</div>
+              <div className="mt-1 whitespace-pre-wrap break-words font-medium text-gray-900">
+                {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
+              </div>
+            </div>
           </div>
           {/* Cancelled info box (โชว์เมื่อยกเลิกแล้ว) */}
           {status.includes("cancel") && (
@@ -351,7 +366,7 @@ export default function UserReservationDetailModal({
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 <div className="rounded-xl border bg-white px-3 py-3">
                   <label className="block text-xs text-gray-600 mb-1">
-                    วันเวลา (ใหม่)
+                    วันเวลา
                   </label>
                   <input
                     type="datetime-local"
@@ -363,7 +378,7 @@ export default function UserReservationDetailModal({
 
                 <div className="rounded-xl border bg-white px-3 py-3">
                   <label className="block text-xs text-gray-600 mb-1">
-                    จำนวนที่นั่ง (ใหม่)
+                    จำนวนที่นั่ง
                   </label>
                   <input
                     type="number"
@@ -372,6 +387,18 @@ export default function UserReservationDetailModal({
                     onChange={(e) => setEditPartySize(e.target.value)}
                     className="w-full rounded-lg border px-3 py-2 text-sm focus:border-amber-500 focus:ring-amber-500"
                     placeholder="เช่น 2"
+                  />
+                </div>
+
+                <div className="rounded-xl border bg-white px-3 py-3">
+                  <label className="block text-xs text-gray-600 mb-1">
+                    ข้อมูลเพิ่มเติม
+                  </label>
+                  <input
+                    value={editComment}
+                    onChange={(e) => setEditComment(e.target.value)}
+                    className="w-full rounded-lg border px-3 py-2 text-sm focus:border-amber-500 focus:ring-amber-500"
+                    placeholder="แก้ไขข้อมูลเพิ่มเติม"
                   />
                 </div>
               </div>

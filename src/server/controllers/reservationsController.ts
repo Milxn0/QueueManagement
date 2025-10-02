@@ -10,6 +10,7 @@ export type UserReservationRow = {
   reservation_datetime: string | null;
   queue_code: string | null;
   partysize: number | string | null;
+  comment: string | null;
   status: string | null;
   tbl?: { table_name: string | null } | null;
 };
@@ -30,12 +31,12 @@ export async function listReservationsToday() {
     .from("reservations")
     .select(
       `
-      id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
-      user:users!reservations_user_id_fkey(name, phone, email),
-      cancelled_at, cancelled_reason,
-      cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
-      tbl:tables!reservations_table_id_fkey(table_name)
-      `
+  id, user_id, reservation_datetime, partysize, queue_code, comment, status, created_at, table_id,
+  user:users!reservations_user_id_fkey(name, phone, email),
+  cancelled_at, cancelled_reason,
+  cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
+  tbl:tables!reservations_table_id_fkey(table_name)
+  `
     )
     .gte("reservation_datetime", start.toISOString())
     .lte("reservation_datetime", end.toISOString())
@@ -99,6 +100,7 @@ export async function listReservationsByUser(sb: unknown, userId: string) {
       queue_code,
       partysize,
       status,
+      comment,
       tbl:tables(table_name)
       `
     )
@@ -117,7 +119,7 @@ export async function listUserwaitingReservations(sb: unknown, userId: string) {
   const supabase = createServiceClient();
   const { data, error } = await supabase
     .from("reservations")
-    .select("id, reservation_datetime, status, queue_code")
+    .select("id, reservation_datetime, status, queue_code, comment")
     .eq("user_id", userId)
     .in("status", [...waiting_STATUSES, ...CONFIRMED_STATUSES])
     .order("reservation_datetime", { ascending: true })

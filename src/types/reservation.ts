@@ -8,6 +8,7 @@ export type Reservation = {
   reservation_datetime: string;
   partysize: number | string | null;
   queue_code: string | null;
+  comment: string | null;
   status: string | null;
   table_id?: string | null;
   tbl?: { table_name: string | null } | null;

@@ -30,6 +30,7 @@ export default function ReservationPage() {
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
+  const [comment, setComment] = useState("");
   const [partySize, setPartySize] = useState<number>(1);
   const [dateTime, setDateTime] = useState<string>("");
 
@@ -122,7 +123,8 @@ export default function ReservationPage() {
       const code = await insertReservationWithRetries(
         user.id,
         iso,
-        Number(partySize)
+        Number(partySize),
+        comment
       );
       setQueueCode(code);
       setToast({ type: "success", msg: "จองคิวสำเร็จ!" });
@@ -282,6 +284,12 @@ export default function ReservationPage() {
               onChange={(e) => setPartySize(Number(e.target.value))}
             />
             <LabeledInput
+              label="ข้อมูลเพิ่มเติม"
+              placeholder="เช่น นั่งแยก 2 โต๊ะ"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+            />
+            <LabeledInput
               className="md:col-span-2"
               label="วันและเวลา"
               type="datetime-local"
@@ -324,6 +332,7 @@ export default function ReservationPage() {
             <ReadOnlyField label="เบอร์โทรศัพท์" value={phone} />
             <ReadOnlyField label="อีเมล" value={email} />
             <ReadOnlyField label="จำนวนคน" value={String(partySize)} />
+            <ReadOnlyField label="ข้อมูลเพิ่มเติม" value={comment} />
             <ReadOnlyField label="วันและเวลา" value={dateTime} />
             <LabeledInput
               label="ใส่รหัส OTP"
