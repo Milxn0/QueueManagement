@@ -462,6 +462,7 @@ export default function ReservationDetailModal({
 
   const AUTO_CANCEL_UUID = "00000000-0000-0000-0000-000000000001";
 
+  // Delete reservation (and related bills & bill_items)
   const handleDeleteReservation = async () => {
     if (!isAdmin || !row?.id) return;
     try {
