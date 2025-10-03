@@ -12,13 +12,11 @@ export type AnalyticsTotals = {
 };
 
 export type DailyCount = {
-
   date: string;
   count: number;
 };
 
 export type HeatmapMatrix = number[][];
-
 
 export type AnalyticsResult = {
   range: AnalyticsRange;
@@ -39,3 +37,15 @@ export type Row = {
     email: string | null;
   } | null;
 };
+export type ExportMode = "day" | "month" | "year";
+export type Dataset = "reservations" | "users";
+
+export type UsersDailyRow = { date: string; customer: number; staff: number };
+export type DailyByName = { day_th: string; visits: number };
+export type VisibleKey = "all" | "customer" | "staff";
+export interface RoleTotals {
+  all: number;
+  customer: number;
+  staff: number;
+  admin: number;
+}
