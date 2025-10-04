@@ -121,7 +121,7 @@ export default function ReservationDetailModal({
       .from("reservations")
       .select(
         `
-      id, reservation_datetime, status, partysize, cancelled_at,
+      id, reservation_datetime, status, partysize, comment, cancelled_at,
       cancelled_reason, cancelled_by_user_id
     `
       )
@@ -136,6 +136,7 @@ export default function ReservationDetailModal({
     setLocalStatus((data?.status ?? "").toLowerCase());
     setDisplayDatetime(data?.reservation_datetime ?? null);
     setDisplayPartysize(data?.partysize ?? null);
+    setDisplayComment(data?.comment ?? null);
   }
 
   async function loadPaymentInfo(reservationId: string) {
@@ -223,6 +224,7 @@ export default function ReservationDetailModal({
   // edit form
   const [editDate, setEditDate] = useState<string>("");
   const [editSize, setEditSize] = useState<string>("");
+  const [editComment, setEditComment] = useState<string>("");
 
   // cancel reason
   const [reason, setReason] = useState("");
@@ -246,7 +248,9 @@ export default function ReservationDetailModal({
   const [displayPartysize, setDisplayPartysize] = useState<
     number | string | null
   >(row?.partysize ?? null);
-
+  const [displayComment, setDisplayComment] = useState<string | null>(
+    row?.comment ?? null
+  );
   const [showPkg, setShowPkg] = useState(false);
   const [payment, setPayment] = useState<{
     method: string | null;
@@ -289,7 +293,7 @@ export default function ReservationDetailModal({
     setLocalStatus((row?.status ?? "").toLowerCase());
     setDisplayDatetime(row?.reservation_datetime ?? null);
     setDisplayPartysize(row?.partysize ?? null);
-
+    setDisplayComment(row?.comment ?? null);
     const d = parseDate(row?.reservation_datetime ?? null);
     setEditDate(d ? toInputLocal(d) : "");
     setEditSize(
@@ -297,7 +301,7 @@ export default function ReservationDetailModal({
         ? ""
         : String(row.partysize)
     );
-
+    setEditComment(row?.comment ?? "");
     setCancelStep(0);
     setTableStep(0);
     setEditStep(0);
@@ -412,6 +416,8 @@ export default function ReservationDetailModal({
         const n = Number(editSize);
         payload.partysize = Number.isFinite(n) ? n : null;
       }
+      if (editComment?.trim()) payload.comment = editComment.trim();
+
       if (Object.keys(payload).length === 0) {
         setEditStep(0);
         return;
@@ -430,7 +436,9 @@ export default function ReservationDetailModal({
         setDisplayDatetime(payload.reservation_datetime as string);
       if ("partysize" in payload)
         setDisplayPartysize(payload.partysize as number | null);
-
+      if ("comment" in payload) {
+        setDisplayComment((payload.comment as string | null) ?? null);
+      }
       setEditStep(0);
       setOk("แก้ไขสำเร็จ");
       onUpdated?.();
@@ -579,6 +587,13 @@ export default function ReservationDetailModal({
                   {typeof displayPartysize === "number"
                     ? displayPartysize
                     : displayPartysize ?? "—"}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
+                <div className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</div>
+                <div className="mt-1 font-medium text-gray-900">
+                  {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
                 </div>
               </div>
 
@@ -809,7 +824,7 @@ export default function ReservationDetailModal({
                     แก้ไขรายละเอียดคิว
                   </div>
                   <div className="text-[11px] text-amber-700">
-                    ปรับวันเวลา / จำนวนที่นั่ง
+                    <span className="text-[11px] text-red-600"> *สามารถแก้ไขได้เมื่อลูกค้าบอกเท่านั้น</span>
                   </div>
                 </div>
 
@@ -838,6 +853,18 @@ export default function ReservationDetailModal({
                       onChange={(e) => setEditSize(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       placeholder="เช่น 2"
+                    />
+                  </div>
+
+                  <div className="rounded-xl border bg-white px-3 py-3">
+                    <label className="block text-xs text-gray-600 mb-1">
+                      ข้อมูลเพิ่มเติม
+                    </label>
+                    <input
+                      value={editComment}
+                      onChange={(e) => setEditComment(e.target.value)}
+                      className="w-full rounded-lg border px-3 py-2 text-sm focus:border-amber-500 focus:ring-amber-500"
+                      placeholder="แก้ไขข้อมูลเพิ่มเติม"
                     />
                   </div>
                 </div>
@@ -1041,7 +1068,7 @@ export default function ReservationDetailModal({
                         onClick={() => {
                           setShowPayment(true);
                         }}
-                        className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
+                        className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-emerald-700"
                       >
                         ชำระเงิน
                       </button>

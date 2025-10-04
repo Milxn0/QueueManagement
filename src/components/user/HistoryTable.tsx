@@ -12,6 +12,7 @@ type RowLike = {
   reservation_datetime: string | null;
   queue_code: string | null;
   partysize: number | string | null;
+  comment: string |null;
   status: string | null;
   tbl?: { table_name: string | null } | null;
   [k: string]: any;

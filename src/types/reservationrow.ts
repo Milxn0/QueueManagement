@@ -4,6 +4,7 @@ export type ReservationRow = {
   reservation_datetime: string | null;
   partysize: number | string | null;
   queue_code: string | null;
+  comment: string | null;
   status: string | null;
 
   users?: {

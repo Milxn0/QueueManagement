@@ -6,6 +6,7 @@ export type ReservationForDetail = {
   reservation_datetime: string | null;
   partysize: number | string | null;
   status: string | null;
+  comment: string | null;
   user?: { name: string | null } | null;
   cancelled_by?: { name: string | null; role?: string | null } | null;
   cancelled_reason?: string | null;

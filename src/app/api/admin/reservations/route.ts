@@ -15,7 +15,7 @@ export async function GET(req: Request) {
     .from("reservations")
     .select(
       `
-      id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
+      id, user_id, reservation_datetime, partysize, queue_code, status, comment, created_at, table_id,
       user:users!reservations_user_id_fkey(name, phone, email),
       cancelled_at, cancelled_reason,
       cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),

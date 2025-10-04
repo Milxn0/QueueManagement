@@ -35,13 +35,15 @@ export async function updateReservationByUser(
   reservationId: string,
   userId: string,
   newReservationISO: string,
-  newPartySize: number
+  newPartySize: number,
+  newComment: string,
 ) {
   const { error: upErr } = await supabase
     .from("reservations")
     .update({
       reservation_datetime: newReservationISO,
       partysize: newPartySize,
+      comment: newComment,
     })
     .eq("id", reservationId)
     .eq("user_id", userId);
@@ -66,7 +68,8 @@ export async function cancelReservationByUser(
 export async function insertReservationWithRetries(
   userId: string,
   reservationISO: string,
-  partySize: number
+  partySize: number,
+  comment: string
 ) {
   const MAX_RETRY = 5;
   for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
@@ -74,6 +77,7 @@ export async function insertReservationWithRetries(
     const { error } = await supabase.from("reservations").insert({
       user_id: userId,
       reservation_datetime: reservationISO,
+      comment: comment,
       partysize: partySize,
       queue_code,
       status: "waiting",

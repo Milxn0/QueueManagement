@@ -18,6 +18,7 @@ type DetailRow = {
   reservation_datetime: string | null;
   partysize: number | string | null;
   queue_code: string | null;
+  comment: string | null;
   status: string | null;
   users?: { name?: string | null } | null;
   user?: { name?: string | null } | null;
@@ -72,11 +73,11 @@ export default function UserReservationHistoryPage() {
       .from("reservations")
       .select(
         `
-    id, user_id, reservation_datetime, partysize, queue_code, status, created_at, table_id,
+    id, user_id, reservation_datetime, partysize, queue_code, status, comment, created_at, table_id,
     cancelled_reason, cancelled_by_user_id, cancelled_at,
     users:users!reservations_user_id_fkey(name, phone),
     tbl:tables!reservations_table_id_fkey(table_name),
-    cancelled_by:users!reservations_cancelled_by_user_id_fkey(id, name, role)  -- 👈 join ผู้ยกเลิก
+    cancelled_by:users!reservations_cancelled_by_user_id_fkey(id, name, role)
   `
       )
       .eq("user_id", me.id)
@@ -102,10 +103,9 @@ export default function UserReservationHistoryPage() {
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
 
   // modal handlers
-  // PUT ยกเลิกการจอง (เเก้ไขสถานะเป็น cancelled)
-  async function handleSubmitEdit(id: string, iso: string, size: number) {
+  async function handleSubmitEdit(id: string, iso: string, size: number, cmedit: string) {
     if (!me?.id) return;
-    await updateReservationByUser(id, me.id, iso, size);
+    await updateReservationByUser(id, me.id, iso, size, cmedit);
     await refetch();
   }
 
