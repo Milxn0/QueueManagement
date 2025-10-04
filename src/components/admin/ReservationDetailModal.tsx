@@ -633,9 +633,7 @@ export default function ReservationDetailModal({
                         payment?.method ?? ""
                       );
                       return (
-                        <span
-                          className={`className="mt-1 font-medium text-emerald-900 `}
-                        >
+                        <span className="mt-1 font-medium text-emerald-900">
                           {paymentMethodLabel(pmKey)}
                         </span>
                       );
