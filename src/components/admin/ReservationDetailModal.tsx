@@ -10,17 +10,16 @@ import {
   faCircleCheck,
   faInfo,
   faXmark,
+  faTriangleExclamation,
 } from "@fortawesome/free-solid-svg-icons";
 import { createClient } from "@/lib/supabaseClient";
 import type { OccupiedItem, Props } from "@/types/reservationdetail";
-import { useRouter } from "next/navigation";
 import PaymentStep from "@/components/admin/PaymentStep";
 import {
   statusClass,
   normalizePaymentMethod,
   paymentMethodLabel,
 } from "@/utils/status";
-import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 
 const TH_TZ = "Asia/Bangkok";
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
@@ -71,6 +70,7 @@ const formatTime = (value: string) => {
       })
     : "-";
 };
+
 const formatDisplayDate = (iso: string | null) => {
   if (!iso) return "—";
   const d = new Date(iso);
@@ -102,7 +102,6 @@ const showOccCode = (o?: {
 };
 
 /* ---------- Component ---------- */
-
 export default function ReservationDetailModal({
   open,
   row,
@@ -118,7 +117,7 @@ export default function ReservationDetailModal({
   onUpdated,
 }: Props) {
   const supabase = useMemo(() => createClient(), []);
-  const router = useRouter();
+
   async function refreshRow() {
     if (!row?.id) return;
     const { data, error } = await supabase
@@ -136,7 +135,6 @@ export default function ReservationDetailModal({
       console.error(error);
       return;
     }
-    // อัปเดตฟิลด์ที่โชว์ในโมดอล
     setLocalStatus((data?.status ?? "").toLowerCase());
     setDisplayDatetime(data?.reservation_datetime ?? null);
     setDisplayPartysize(data?.partysize ?? null);
@@ -158,7 +156,6 @@ export default function ReservationDetailModal({
       return;
     }
 
-    // packages
     const { data: pkgRows } = await supabase
       .from("bill_items")
       .select("name_snapshot, unit_price, quantity")
@@ -170,17 +167,12 @@ export default function ReservationDetailModal({
       unitPrice: Number(it?.unit_price ?? 0),
       qty: Number(it?.quantity ?? 0),
     }));
-    const packageQty = packages.reduce(
-      (s: any, it: { qty: any }) => s + it.qty,
-      0
-    );
+    const packageQty = packages.reduce((s: number, it: any) => s + it.qty, 0);
     const pkgSubtotal = packages.reduce(
-      (s: number, it: { unitPrice: number; qty: number }) =>
-        s + it.unitPrice * it.qty,
+      (s: number, it: any) => s + it.unitPrice * it.qty,
       0
     );
 
-    // a la carte
     const { data: alaRows } = await supabase
       .from("bill_items")
       .select("name_snapshot, unit_price, quantity, kind")
@@ -193,8 +185,7 @@ export default function ReservationDetailModal({
       qty: Number(it?.quantity ?? 0),
     }));
     const alaSubtotal = alaItems.reduce(
-      (s: number, it: { unitPrice: number; qty: number }) =>
-        s + it.unitPrice * it.qty,
+      (s: number, it: any) => s + it.unitPrice * it.qty,
       0
     );
 
@@ -220,6 +211,9 @@ export default function ReservationDetailModal({
     () => (displayStatus || "").toLowerCase(),
     [displayStatus]
   );
+  // NEW: แสดง payment เฉพาะ paid
+  const isPaid = normStatus === "paid";
+
   // steps
   const [cancelStep, setCancelStep] = useState<0 | 1>(0);
   const [tableStep, setTableStep] = useState<0 | 1>(0);
@@ -234,7 +228,7 @@ export default function ReservationDetailModal({
   const [reason, setReason] = useState("");
   const minReasonLen = 3;
 
-  //Payment State
+  // Payment Drawer
   const [showPayment, setShowPayment] = useState(false);
 
   const [optimisticTableNo, setOptimisticTableNo] = useState<number | null>(
@@ -244,6 +238,20 @@ export default function ReservationDetailModal({
   const [confirmDelOpen, setConfirmDelOpen] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
   const [delErr, setDelErr] = useState<string | null>(null);
+
+  const [notice, setNotice] = useState<null | {
+    type: "success" | "error" | "info";
+    text: string;
+  }>(null);
+  const showError = (text: string) => setNotice({ type: "error", text });
+  const clearNotice = () => setNotice(null);
+
+  const baht = (n: number | string | null | undefined) =>
+    new Intl.NumberFormat("th-TH", {
+      style: "currency",
+      currency: "THB",
+      maximumFractionDigits: 0,
+    }).format(Number(n || 0));
 
   const [ok, setOk] = useState<string | null>(null);
   const [displayDatetime, setDisplayDatetime] = useState<string | null>(
@@ -312,15 +320,21 @@ export default function ReservationDetailModal({
     setReason("");
     setOk(null);
     setShowPayment(false);
-    setShowPayment(false);
     setOptimisticTableNo(currentTableNo ?? null);
   }, [row?.id, open, currentTableNo]);
 
+  // ดึงบิลเฉพาะตอน paid
   useEffect(() => {
-    if (open && row?.id && normStatus === "paid") {
+    if (open && row?.id && isPaid) {
       loadPaymentInfo(row.id);
     }
-  }, [open, row?.id, normStatus]);
+  }, [open, row?.id, isPaid]);
+
+  // ถ้าไม่ใช่ paid ให้ปิด toggle รายละเอียด
+  useEffect(() => {
+    if (!isPaid) setShowPkg(false);
+  }, [isPaid]);
+
   if (!open || !row) return null;
 
   const handleClose = () => {
@@ -371,13 +385,13 @@ export default function ReservationDetailModal({
     if (busy) return;
 
     if (normStatus === "paid") {
-      alert("ออเดอร์นี้ชำระเงินแล้ว ไม่สามารถเลือกหรือย้ายโต๊ะได้");
+      showError("ออเดอร์นี้ชำระเงินแล้ว ไม่สามารถเลือกหรือย้ายโต๊ะได้");
       return;
     }
 
     const msg = conflictMessage(no);
     if (msg) {
-      alert(msg);
+      showError(msg);
       return;
     }
 
@@ -400,7 +414,7 @@ export default function ReservationDetailModal({
     } catch (e: any) {
       setOptimisticTableNo(prevTable);
       setLocalStatus((row?.status ?? "").toLowerCase());
-      alert("ไม่สามารถจัดโต๊ะให้ได้: " + (e?.message || ""));
+      showError("ไม่สามารถจัดโต๊ะให้ได้: " + (e?.message || ""));
     } finally {
       setBusy(false);
     }
@@ -431,11 +445,10 @@ export default function ReservationDetailModal({
         .update(payload)
         .eq("id", row.id);
       if (error) {
-        alert("บันทึกไม่สำเร็จ: " + error.message);
+        showError("บันทึกไม่สำเร็จ: " + error.message);
         return;
       }
 
-      // optimistic
       if (payload.reservation_datetime)
         setDisplayDatetime(payload.reservation_datetime as string);
       if ("partysize" in payload)
@@ -453,16 +466,6 @@ export default function ReservationDetailModal({
     }
   };
 
-  function handleSavePayment(payload: {
-    selectedPackage: number | null;
-    people: number;
-    alaItems: { name: string; qty: number; price: number }[];
-    totals: { pkg: number; ala: number; sum: number };
-  }) {
-    setOk("บันทึกการชำระเงินสำเร็จ");
-    onUpdated?.();
-    setTimeout(() => setOk(null), 1600);
-  }
   const alaQty = (payment?.alaItems ?? []).reduce(
     (s, it) => s + (it.qty ?? 0),
     0
@@ -474,7 +477,6 @@ export default function ReservationDetailModal({
 
   const AUTO_CANCEL_UUID = "00000000-0000-0000-0000-000000000001";
 
-  // Delete reservation (and related bills & bill_items)
   const handleDeleteReservation = async () => {
     if (!isAdmin || !row?.id) return;
     try {
@@ -532,7 +534,7 @@ export default function ReservationDetailModal({
       />
 
       {/* Dialog */}
-      <div className="relative w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
+      <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-gray-100">
         {/* Header */}
         <div className="bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4">
           <div className="flex items-start justify-between">
@@ -565,7 +567,7 @@ export default function ReservationDetailModal({
         {/* Body */}
         {!showPayment && (
           <div className="px-6 py-5">
-            {/* Success banner (toast-like) */}
+            {/* Success banner */}
             {ok && (
               <div className="mb-4 flex items-center gap-2 rounded-xl border border-emerald-300 bg-emerald-50 px-4 py-2 text-emerald-700">
                 <FontAwesomeIcon
@@ -576,69 +578,89 @@ export default function ReservationDetailModal({
               </div>
             )}
 
-            {/* Info grid */}
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
-                <div className="text-xs text-gray-500">วันเวลา</div>
-                <div className="mt-1 font-medium text-gray-900">
-                  {formatDate(displayDatetime)}
+            {/* Notice banner */}
+            {notice && (
+              <div
+                role="alert"
+                aria-live="polite"
+                className={[
+                  "mb-4 rounded-xl px-4 py-2 text-sm",
+                  notice.type === "error"
+                    ? "border border-rose-300 bg-rose-50 text-rose-700"
+                    : notice.type === "success"
+                    ? "border border-emerald-300 bg-emerald-50 text-emerald-700"
+                    : "border border-indigo-200 bg-indigo-50 text-indigo-800",
+                ].join(" ")}
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <span>{notice.text}</span>
+                  <button
+                    onClick={clearNotice}
+                    className="text-xs opacity-70 hover:opacity-100"
+                  >
+                    ปิด
+                  </button>
                 </div>
               </div>
+            )}
 
-              <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
-                <div className="text-xs text-gray-500">จำนวนที่นั่ง</div>
-                <div className="mt-1 font-medium text-gray-900">
+            {/* INFO GRID (read-only) */}
+            <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs text-gray-500">วันเวลา</p>
+                <p className="mt-0.5 font-medium">
+                  {formatDate(displayDatetime)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs text-gray-500">จำนวนที่นั่ง</p>
+                <p className="mt-0.5 font-medium">
                   {typeof displayPartysize === "number"
                     ? displayPartysize
-                    : displayPartysize ?? "—"}
-                </div>
+                    : displayPartysize ?? "—"}{" "}
+                  คน
+                </p>
               </div>
-
-              <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
-                <div className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</div>
-                <div className="mt-1 font-medium text-gray-900">
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 md:col-span-2">
+                <p className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</p>
+                <p className="mt-0.5">
                   {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 md:col-span-2">
+                <p className="text-xs text-gray-500">สถานะ</p>
+                <div className="mt-1 inline-flex items-center gap-2">
+                  <span
+                    className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusClass(
+                      normStatus
+                    )}`}
+                  >
+                    {displayStatus || "—"}
+                  </span>
+                  {shownTableNo ? (
+                    <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
+                      โต๊ะ: {shownTableNo}
+                    </span>
+                  ) : null}
                 </div>
               </div>
+            </section>
 
-              <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
-                <div className="text-xs text-gray-500">สถานะ</div>
-                <span
-                  className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold capitalize ${statusClass(
-                    normStatus
-                  )}`}
-                >
-                  {displayStatus || "—"}
-                </span>
-                {shownTableNo != null && (
-                  <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                    {normStatus === "paid" || fromManageQueue
-                      ? "โต๊ะที่นั่ง"
-                      : "โต๊ะปัจจุบัน"}
-                    : {shownTableNo}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {normStatus === "paid" && (
-              <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
-                  <div className="text-xs text-emerald-700">
-                    ช่องทางการชำระเงิน
-                  </div>
-                  <div className="mt-1">
+            {/* SUMMARY CARDS — show only when paid */}
+            {isPaid && payment && (
+              <section className="mt-4 mb-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs text-emerald-700">ช่องทางการชำระเงิน</p>
+                  <p className="mt-0.5 font-semibold text-emerald-900">
                     {(() => {
-                      const pmKey = normalizePaymentMethod(
-                        payment?.method ?? ""
-                      );
+                      const pmKey = normalizePaymentMethod(payment?.method ?? "");
                       return (
                         <span className="mt-1 font-medium text-emerald-900">
                           {paymentMethodLabel(pmKey)}
                         </span>
                       );
                     })()}
-                  </div>
+                  </p>
                 </div>
 
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
@@ -649,8 +671,7 @@ export default function ReservationDetailModal({
                     <button
                       type="button"
                       onClick={() => setShowPkg((v) => !v)}
-                      disabled={!hasAnyBillItems}
-                      className="text-[11px] font-medium text-emerald-700 hover:underline disabled:text-emerald-300"
+                      className="text-[11px] font-medium text-emerald-700 hover:underline"
                     >
                       ดูรายละเอียด
                     </button>
@@ -665,120 +686,128 @@ export default function ReservationDetailModal({
                   </div>
                 </div>
 
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
-                  <div className="text-xs text-emerald-700">ราคารวม</div>
-                  <div className="mt-1 font-medium text-emerald-900">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs text-emerald-700">ราคารวม</p>
+                  <p className="mt-0.5 text-lg font-bold text-emerald-900">
                     {formatTHB(payment?.total)}
-                  </div>
+                  </p>
                 </div>
-
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50/40 px-4 py-3">
-                  <div className="text-xs text-emerald-700">เวลาที่ชำระ</div>
-                  <div className="mt-1 font-medium text-emerald-900">
+                <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+                  <p className="text-xs text-emerald-700">เช็คเอาต์</p>
+                  <p className="mt-0.5 font-semibold text-emerald-900">
                     {formatDisplayDate(payment?.paidAt ?? null)}
-                  </div>
+                  </p>
                 </div>
-              </div>
+              </section>
             )}
 
-            {showPkg && (
-              <div className="mt-3 rounded-xl border border-emerald-200 bg-white p-3">
-                <div className="mb-2 text-sm font-semibold text-emerald-800">
-                  รายละเอียดแพ็กเกจทั้งหมด
-                </div>
-                {payment && payment.packages.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full text-sm">
-                      <thead className="bg-emerald-50 text-emerald-800">
+            {/* TABLE DETAIL (toggle) — add top margin for spacing */}
+            {isPaid && payment && showPkg && (
+              <div className="mt-5 md:mt-6 overflow-x-auto">
+                <table className="w-full table-fixed border-separate border-spacing-0 overflow-hidden rounded-xl text-sm">
+                  <thead>
+                    <tr className="bg-emerald-100/70 text-sm text-emerald-900">
+                      <th className="w-[45%] rounded-tl-xl px-4 py-2 text-left font-semibold">
+                        แพ็กเกจ
+                      </th>
+                      <th className="w-[20%] px-4 py-2 text-right font-semibold">
+                        ราคา/หน่วย
+                      </th>
+                      <th className="w-[15%] px-4 py-2 text-center font-semibold">
+                        จำนวน
+                      </th>
+                      <th className="w-[20%] rounded-tr-xl px-4 py-2 text-right font-semibold">
+                        รวม
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="text-sm">
+                    {payment.packages.map((p, i) => (
+                      <tr
+                        key={`pkg-${i}`}
+                        className={i % 2 ? "bg-white" : "bg-emerald-50/30"}
+                      >
+                        <td className="px-4 py-2">{p.name}</td>
+                        <td className="px-4 py-2 text-right">
+                          {formatTHB(p.unitPrice)}
+                        </td>
+                        <td className="px-4 py-2 text-center">{p.qty}</td>
+                        <td className="px-4 py-2 text-right">
+                          {formatTHB(p.unitPrice * p.qty)}
+                        </td>
+                      </tr>
+                    ))}
+
+                    <tr className="bg-white">
+                      <td
+                        className="px-4 py-2 text-right text-gray-600"
+                        colSpan={3}
+                      >
+                        รวมแพ็กเกจ
+                      </td>
+                      <td className="px-4 py-2 text-right font-medium">
+                        {formatTHB(payment?.pkgSubtotal ?? 0)}
+                      </td>
+                    </tr>
+
+                    {Boolean(payment?.alaItems?.length) && (
+                      <>
                         <tr>
-                          <th className="px-3 py-2 text-left">แพ็กเกจ</th>
-                          <th className="px-3 py-2 text-right">ราคา/หน่วย</th>
-                          <th className="px-3 py-2 text-right">จำนวน</th>
-                          <th className="px-3 py-2 text-right">รวม</th>
+                          <td
+                            className="px-4 pt-4 text-sm font-semibold text-emerald-900"
+                            colSpan={4}
+                          >
+                            เมนูเพิ่ม
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody className="divide-y">
-                        {payment.packages.map((p, i) => (
-                          <tr key={i}>
-                            <td className="px-3 py-2">{p.name}</td>
-                            <td className="px-3 py-2 text-right">
+
+                        {payment.alaItems.map((p, i) => (
+                          <tr
+                            key={`ala-${i}`}
+                            className={i % 2 ? "bg-white" : "bg-emerald-50/30"}
+                          >
+                            <td className="px-4 py-2">{p.name}</td>
+                            <td className="px-4 py-2 text-right">
                               {formatTHB(p.unitPrice)}
                             </td>
-                            <td className="px-3 py-2 text-right">{p.qty}</td>
-                            <td className="px-3 py-2 text-right">
+                            <td className="px-4 py-2 text-center">{p.qty}</td>
+                            <td className="px-4 py-2 text-right">
                               {formatTHB(p.unitPrice * p.qty)}
                             </td>
                           </tr>
                         ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="font-semibold">
-                          <td className="px-3 py-2 text-right" colSpan={3}>
-                            รวมแพ็กเกจ
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            {formatTHB(payment?.pkgSubtotal ?? 0)}
-                          </td>
-                        </tr>
-                        <tr className="font-semibold">
-                          <td className="px-3 py-2 text-right" colSpan={3}>
+
+                        <tr className="bg-white">
+                          <td
+                            className="px-4 py-2 text-right text-gray-600"
+                            colSpan={3}
+                          >
                             รวมเมนูเพิ่ม
                           </td>
-                          <td className="px-3 py-2 text-right">
+                          <td className="px-4 py-2 text-right font-medium">
                             {formatTHB(payment?.alaSubtotal ?? 0)}
                           </td>
                         </tr>
-                        <tr className="font-semibold">
-                          <td className="px-3 py-2 text-right" colSpan={3}>
-                            รวมทั้งสิ้น
-                          </td>
-                          <td className="px-3 py-2 text-right">
-                            {formatTHB(
-                              (payment?.pkgSubtotal ?? 0) +
-                                (payment?.alaSubtotal ?? 0)
-                            )}
-                          </td>
-                        </tr>
-                      </tfoot>
-                    </table>
-                    {payment?.alaItems?.length ? (
-                      <div className="mt-3 overflow-x-auto">
-                        <table className="min-w-full text-sm">
-                          <thead className="bg-emerald-50 text-emerald-800">
-                            <tr>
-                              <th className="px-3 py-2 text-left">เมนูเพิ่ม</th>
-                              <th className="px-3 py-2 text-right">
-                                ราคา/หน่วย
-                              </th>
-                              <th className="px-3 py-2 text-right">จำนวน</th>
-                              <th className="px-3 py-2 text-right">รวม</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y">
-                            {payment.alaItems.map((p, i) => (
-                              <tr key={i}>
-                                <td className="px-3 py-2">{p.name}</td>
-                                <td className="px-3 py-2 text-right">
-                                  {formatTHB(p.unitPrice)}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  {p.qty}
-                                </td>
-                                <td className="px-3 py-2 text-right">
-                                  {formatTHB(p.unitPrice * p.qty)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="text-sm text-slate-500">
-                    ไม่พบรายการแพ็กเกจ
-                  </div>
-                )}
+                      </>
+                    )}
+
+                    <tr className="bg-emerald-600 text-white">
+                      <td
+                        className="rounded-bl-xl px-4 py-2 text-right font-semibold"
+                        colSpan={3}
+                      >
+                        รวมทั้งสิ้น
+                      </td>
+                      <td className="rounded-br-xl px-4 py-2 text-right text-base font-bold">
+                        {formatTHB(
+                          (payment?.pkgSubtotal ?? 0) +
+                            (payment?.alaSubtotal ?? 0)
+                        )}
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             )}
 
@@ -790,27 +819,26 @@ export default function ReservationDetailModal({
                 </div>
 
                 <div className="space-y-2 text-sm">
-                  {/* 1) Role */}
                   <div>
                     <span className="text-red-700">บทบาทผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {row.cancelled_by_user_id === AUTO_CANCEL_UUID
+                      {row.cancelled_by_user_id === "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
-                        : capitalize(row.cancelled_by?.role) || "—"}
+                        : (row as any).cancelled_by?.role
+                        ? (row as any).cancelled_by.role
+                        : "—"}
                     </span>
                   </div>
 
-                  {/* 2) Name */}
                   <div>
                     <span className="text-red-700">ชื่อผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {row.cancelled_by_user_id === AUTO_CANCEL_UUID
+                      {row.cancelled_by_user_id === "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
-                        : row.cancelled_by?.name?.trim() || "—"}
+                        : (row as any).cancelled_by?.name?.trim() || "—"}
                     </span>
                   </div>
 
-                  {/* 3) Reason */}
                   <div>
                     <span className="text-red-700">สาเหตุ:</span>{" "}
                     <span className="break-words whitespace-pre-line font-medium">
@@ -818,7 +846,6 @@ export default function ReservationDetailModal({
                     </span>
                   </div>
 
-                  {/* 4) Cancelled_at */}
                   <div>
                     <span className="text-red-700">ยกเลิกเมื่อ:</span>{" "}
                     <span className="font-medium">
@@ -838,7 +865,6 @@ export default function ReservationDetailModal({
                   </div>
                   <div className="text-[11px] text-amber-700">
                     <span className="text-[11px] text-red-600">
-                      {" "}
                       *สามารถแก้ไขได้เมื่อลูกค้าบอกเท่านั้น
                     </span>
                   </div>
@@ -851,7 +877,9 @@ export default function ReservationDetailModal({
                     </label>
                     <input
                       type="datetime-local"
-                      value={editDate}
+                      value={toInputLocal(
+                        parseDate(displayDatetime ?? null) || new Date()
+                      )}
                       onChange={(e) => setEditDate(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                     />
@@ -865,19 +893,19 @@ export default function ReservationDetailModal({
                       type="number"
                       min={1}
                       max={50}
-                      value={editSize}
+                      value={String(displayPartysize ?? "")}
                       onChange={(e) => setEditSize(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       placeholder="เช่น 2"
                     />
                   </div>
 
-                  <div className="rounded-xl border bg-white px-3 py-3">
-                    <label className="block text-xs text-gray-600 mb-1">
+                  <div className="rounded-xl border bg-white px-3 py-3 sm:col-span-2">
+                    <label className="mb-1 block text-xs text-gray-600">
                       ข้อมูลเพิ่มเติม
                     </label>
                     <input
-                      value={editComment}
+                      value={String(displayComment ?? "")}
                       onChange={(e) => setEditComment(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm focus:border-amber-500 focus:ring-amber-500"
                       placeholder="แก้ไขข้อมูลเพิ่มเติม"
@@ -1169,6 +1197,8 @@ export default function ReservationDetailModal({
             )}
           </div>
         )}
+
+        {/* Payment Drawer */}
         <PaymentStep
           open={showPayment}
           onClose={() => setShowPayment(false)}
@@ -1206,7 +1236,6 @@ export default function ReservationDetailModal({
                 throw new Error(err?.error || "บันทึกบิลไม่สำเร็จ");
               }
 
-              // refresh UI
               setShowPayment(false);
               setOk("บันทึกการชำระเงินสำเร็จ");
               await refreshRow();
@@ -1214,7 +1243,7 @@ export default function ReservationDetailModal({
               onUpdated?.();
               setTimeout(() => setOk(null), 1600);
             } catch (e: any) {
-              alert(
+              showError(
                 "บันทึกการชำระเงินล้มเหลว: " + (e?.message || "Unknown error")
               );
             } finally {
@@ -1223,7 +1252,7 @@ export default function ReservationDetailModal({
           }}
         />
 
-        {/* Confirm Delete Modal*/}
+        {/* Confirm Delete Modal */}
         {confirmDelOpen && (
           <div className="absolute inset-0 z-[70] flex items-center justify-center">
             <div

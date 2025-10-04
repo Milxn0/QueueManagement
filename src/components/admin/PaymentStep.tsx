@@ -151,12 +151,12 @@ export default function PaymentStep({
   const removeAlaItem = (id: string) =>
     setAlaItems((arr) => arr.filter((i) => i.id !== id));
 
-    const onSubmit = () => {
-     setError(null);
-     if (!selectedPackage && alaItems.length === 0) {
-       setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
-       return;
-     }
+  const onSubmit = () => {
+    setError(null);
+    if (!selectedPackage && alaItems.length === 0) {
+      setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
+      return;
+    }
     if (!paymentMethod) {
       setError("กรุณาเลือกช่องทางการชำระเงิน");
       return;
@@ -187,6 +187,7 @@ export default function PaymentStep({
         {error && (
           <div
             role="alert"
+            aria-live="polite"
             className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
           >
             {error}
@@ -433,43 +434,64 @@ export default function PaymentStep({
           </div>
         </section>
         <section className="mb-4 rounded-xl border bg-white p-3 text-sm">
-  <div className="space-y-2">
-    <div className="text-xs font-medium text-gray-700">ช่องทางชำระเงิน</div>
-    <div className="flex flex-wrap gap-2">
-      {[
-        { key: "cash", label: "เงินสด" },
-        { key: "card", label: "บัตร" },
-        { key: "qr", label: "QR/PromptPay" },
-        { key: "transfer", label: "โอนเงิน" },
-        { key: "e-wallet", label: "E-Wallet" },
-      ].map((m) => {
-        const active = paymentMethod === (m.key as any);
-        return (
-          <button
-            key={m.key}
-            type="button"
-            onClick={() =>
-              setPaymentMethod(m.key as "cash" | "card" | "qr" | "transfer" | "e-wallet")
-            }
-            className={[
-              "rounded-xl px-3 py-1.5 text-sm font-medium border transition",
-              active
-                ? "bg-indigo-600 text-white border-indigo-600"
-                : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50",
-            ].join(" ")}
-            aria-pressed={active}
-          >
-            {m.label}
-          </button>
-        );
-      })}
-    </div>
-  </div>
-</section>
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-700">
+              ช่องทางชำระเงิน
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "cash", label: "เงินสด" },
+                { key: "card", label: "บัตร" },
+                { key: "qr", label: "QR/PromptPay" },
+                { key: "transfer", label: "โอนเงิน" },
+                { key: "e-wallet", label: "E-Wallet" },
+              ].map((m) => {
+                const active = paymentMethod === (m.key as any);
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() =>
+                      setPaymentMethod(
+                        m.key as
+                          | "cash"
+                          | "card"
+                          | "qr"
+                          | "transfer"
+                          | "e-wallet"
+                      )
+                    }
+                    className={[
+                      "rounded-xl px-3 py-1.5 text-sm font-medium border transition",
+                      active
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50",
+                    ].join(" ")}
+                    aria-pressed={active}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* Footer (sticky) */}
-      <div className="sticky bottom-0 flex flex-none justify-end gap-2 border-t bg-white/70 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 flex flex-none items-center gap-3 border-t bg-white/70 px-4 py-3 backdrop-blur">
+        <div className="mr-auto text-sm leading-tight">
+          <div className="font-semibold">
+            รวมทั้งสิ้น {currency(totals.sum)}
+          </div>
+          <div className="text-[11px] text-gray-600">
+            {selectedPackage
+              ? `${selectedPackage.toLocaleString()} × ${people} คน`
+              : `แพ็กเกจ 0`}{" "}
+            • Ala cart {totals.ala.toLocaleString()} บาท
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={onClose}
@@ -484,8 +506,10 @@ export default function PaymentStep({
           onClick={onSubmit}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
           disabled={
-    busy || (!selectedPackage && alaItems.length === 0) || !paymentMethod
-  }
+            busy ||
+            (!selectedPackage && alaItems.length === 0) ||
+            !paymentMethod
+          }
         >
           <FontAwesomeIcon icon={faMoneyBillWave} />
           บันทึกการชำระเงิน
