@@ -23,7 +23,6 @@ export async function POST(req: Request) {
       if (["cash", "card", "qr", "transfer", "e-wallet"].includes(v)) {
         return v as any;
       }
-      // คำพ้องที่เจอบ่อย
       if (["ewallet", "wallet"].includes(v)) return "e-wallet";
       if (["promptpay", "qrpay", "qrcode"].includes(v)) return "qr";
       if (["credit", "debit", "creditcard", "debitcard"].includes(v))
@@ -32,8 +31,15 @@ export async function POST(req: Request) {
     };
 
     const paymentMethod = normalizePaymentMethod(rawMethod);
+
     const selectedPackage: number | null = body?.selectedPackage ?? null;
-    const people: number = Number(body?.people ?? 1);
+
+    // ผู้ใหญ่
+    const people: number = Math.max(0, Number(body?.people ?? 0) || 0);
+
+    const children: number = Math.max(0, Number(body?.children ?? 0) || 0);
+    const childUnitReq: number = Math.max(0, Number(body?.childUnit ?? 0) || 0);
+
     const alaItems: AlaItem[] = Array.isArray(body?.alaItems)
       ? body.alaItems
       : [];
@@ -51,18 +57,28 @@ export async function POST(req: Request) {
         { status: 400 }
       );
     }
-    // คำนวณยอด
-    const pkgUnit = Number(selectedPackage ?? 0);
-    const pkgSubtotal = Math.max(0, pkgUnit) * Math.max(0, Number(people) || 0);
+
+    // ------- คำนวณยอด -------
+    const pkgUnit = Math.max(0, Number(selectedPackage ?? 0) || 0);
+
+    // ถ้า client ไม่ส่ง childUnit มา ให้คำนวณจาก package/2 (ปัดบาท)
+    const childUnit = childUnitReq > 0 ? childUnitReq : Math.round(pkgUnit / 2);
+
+    const pkgAdultSubtotal = pkgUnit * people;
+    const pkgChildSubtotal = childUnit * children;
+    const pkgSubtotal = pkgAdultSubtotal + pkgChildSubtotal;
+
     const alaSubtotal = alaItems.reduce((s, it) => {
       const qty = Math.max(0, Number(it?.qty) || 0);
       const price = Math.max(0, Number(it?.price) || 0);
       return s + qty * price;
     }, 0);
+
     const total = pkgSubtotal + alaSubtotal;
 
     const supabase = createServiceClient();
-    // upsert bills
+
+    // upsert bills (หนึ่งบิลต่อ reservation)
     const { data: bill, error: billErr } = await supabase
       .from("bills")
       .upsert(
@@ -80,7 +96,8 @@ export async function POST(req: Request) {
     if (billErr) {
       return NextResponse.json({ error: billErr.message }, { status: 500 });
     }
-    // clear bill_items
+
+    // ล้างรายการเก่าก่อน
     const { error: delErr } = await supabase
       .from("bill_items")
       .delete()
@@ -91,6 +108,7 @@ export async function POST(req: Request) {
 
     const items: any[] = [];
 
+    // แพ็กเกจผู้ใหญ่
     if (pkgUnit > 0 && people > 0) {
       items.push({
         bill_id: bill.id,
@@ -103,6 +121,19 @@ export async function POST(req: Request) {
       });
     }
 
+    if (childUnit > 0 && children > 0) {
+      items.push({
+        bill_id: bill.id,
+        kind: "package",
+        ref_id: null,
+        name_snapshot: `Package (เด็ก) ${childUnit}`,
+        unit_price: childUnit,
+        quantity: children,
+        parent_item_id: null,
+      });
+    }
+
+    // เมนู a la carte
     for (const it of alaItems) {
       items.push({
         bill_id: bill.id,
@@ -129,6 +160,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: insertErr.message }, { status: 500 });
       }
     }
+
     // อัปเดตสถานะการจอง
     const { error: resErr } = await supabase
       .from("reservations")
@@ -142,11 +174,18 @@ export async function POST(req: Request) {
       {
         bill: {
           id: bill.id,
-          total: bill.total,
+          total,
           payment_method: bill.payment_method,
           status: bill.status,
         },
-        totals: { pkgSubtotal, alaSubtotal, total },
+        totals: {
+          pkgAdultSubtotal,
+          pkgChildSubtotal,
+          pkgSubtotal,
+          alaSubtotal,
+          total,
+        },
+        children: { count: children, unit: childUnit },
       },
       { status: 200 }
     );

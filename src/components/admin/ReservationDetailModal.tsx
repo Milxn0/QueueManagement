@@ -653,7 +653,9 @@ export default function ReservationDetailModal({
                   <p className="text-xs text-emerald-700">ช่องทางการชำระเงิน</p>
                   <p className="mt-0.5 font-semibold text-emerald-900">
                     {(() => {
-                      const pmKey = normalizePaymentMethod(payment?.method ?? "");
+                      const pmKey = normalizePaymentMethod(
+                        payment?.method ?? ""
+                      );
                       return (
                         <span className="mt-1 font-medium text-emerald-900">
                           {paymentMethodLabel(pmKey)}
@@ -822,7 +824,8 @@ export default function ReservationDetailModal({
                   <div>
                     <span className="text-red-700">บทบาทผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {row.cancelled_by_user_id === "00000000-0000-0000-0000-000000000001"
+                      {row.cancelled_by_user_id ===
+                      "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
                         : (row as any).cancelled_by?.role
                         ? (row as any).cancelled_by.role
@@ -833,7 +836,8 @@ export default function ReservationDetailModal({
                   <div>
                     <span className="text-red-700">ชื่อผู้ยกเลิก:</span>{" "}
                     <span className="font-medium">
-                      {row.cancelled_by_user_id === "00000000-0000-0000-0000-000000000001"
+                      {row.cancelled_by_user_id ===
+                      "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
                         : (row as any).cancelled_by?.name?.trim() || "—"}
                     </span>
@@ -1227,6 +1231,8 @@ export default function ReservationDetailModal({
                   paymentMethod: payload?.paymentMethod,
                   selectedPackage: payload?.selectedPackage ?? null,
                   people: payload?.people ?? 1,
+                  children: payload?.children ?? 0,
+                  childUnit: payload?.childUnit ?? 0,
                   alaItems: payload?.alaItems ?? [],
                 }),
               });

@@ -9,8 +9,8 @@ import {
   faUsers,
   faBowlFood,
   faArrowLeft,
-  faFloppyDisk,
   faMoneyBillWave,
+  faChild,
 } from "@fortawesome/free-solid-svg-icons";
 
 export type AlaItem = { id: string; name: string; qty: number; price: number };
@@ -22,9 +22,11 @@ type Props = {
   onSaved: (payload: {
     paymentMethod: "cash" | "card" | "qr" | "transfer" | "e-wallet" | null;
     selectedPackage: number | null;
-    people: number;
+    people: number; // ผู้ใหญ่
     alaItems: AlaItem[];
     totals: { pkg: number; ala: number; sum: number };
+    children: number;
+    childUnit: number;
   }) => void;
   packages?: number[];
   peopleInitial?: number;
@@ -37,10 +39,8 @@ type Props = {
 };
 
 const currency = (n: number) => n.toLocaleString("th-TH") + " บาท";
-
 const preventNumberScroll = (e: React.WheelEvent<HTMLInputElement>) =>
   (e.target as HTMLInputElement).blur();
-
 const rid = () => Math.random().toString(36).slice(2, 8);
 
 export default function PaymentStep({
@@ -58,16 +58,18 @@ export default function PaymentStep({
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "card" | "qr" | "transfer" | "e-wallet" | null
   >(null);
+
   // ---------- local states ----------
   const [selectedPackage, setSelectedPackage] = useState<number | null>(
     initialSelectedPackage
   );
 
+  // ผู้ใหญ่
   const [people, setPeople] = useState<number>(
     Number.isFinite(peopleInitial) && peopleInitial > 0 ? peopleInitial : 1
   );
-  const [editingPeople, setEditingPeople] = useState(false);
-  const [savingPeople, setSavingPeople] = useState(false);
+
+  const [children, setChildren] = useState<number>(0);
 
   const [alaItems, setAlaItems] = useState<AlaItem[]>(initialAlaItems ?? []);
   const [addingAla, setAddingAla] = useState(false);
@@ -83,7 +85,7 @@ export default function PaymentStep({
     setSelectedPackage(initialSelectedPackage ?? null);
     setAlaItems(initialAlaItems ?? []);
     setPeople(peopleInitial > 0 ? peopleInitial : 1);
-    setEditingPeople(false);
+    setChildren(0);
     setAddingAla(false);
     setNewName("");
     setNewPrice("");
@@ -91,16 +93,22 @@ export default function PaymentStep({
     setPaymentMethod(null);
   }, [open, peopleInitial, initialAlaItems, initialSelectedPackage]);
 
-  // focus ชื่อเมนูทันทีเมื่อกด “เพิ่มเมนู”
   useEffect(() => {
     if (addingAla) nameInputRef.current?.focus();
   }, [addingAla]);
 
+  const childUnit = useMemo(
+    () => (selectedPackage ? Math.round(selectedPackage / 2) : 0),
+    [selectedPackage]
+  );
+
   const totals = useMemo(() => {
-    const pkg = (selectedPackage ?? 0) * (people || 0);
+    const pkgAdults = (selectedPackage ?? 0) * (people || 0);
+    const pkgChildren = childUnit * (children || 0);
+    const pkg = pkgAdults + pkgChildren;
     const ala = (alaItems ?? []).reduce((s, i) => s + i.price * i.qty, 0);
     return { pkg, ala, sum: pkg + ala };
-  }, [selectedPackage, people, alaItems]);
+  }, [selectedPackage, people, children, alaItems, childUnit]);
 
   if (!open) return null;
 
@@ -113,19 +121,14 @@ export default function PaymentStep({
     setPeople(normalized);
     setError(null);
 
-    if (!onUpdatePeople) {
-      setEditingPeople(false);
-      return;
-    }
+    if (!onUpdatePeople) return;
+
     try {
-      setSavingPeople(true);
       await onUpdatePeople(normalized);
       await onRefresh?.();
-      setEditingPeople(false);
     } catch (e: any) {
       setError(e?.message || "บันทึกจำนวนคนไม่สำเร็จ");
     } finally {
-      setSavingPeople(false);
     }
   };
 
@@ -167,6 +170,8 @@ export default function PaymentStep({
       alaItems,
       totals,
       paymentMethod,
+      children,
+      childUnit,
     });
   };
 
@@ -188,7 +193,7 @@ export default function PaymentStep({
           <div
             role="alert"
             aria-live="polite"
-            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+            className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
           >
             {error}
           </div>
@@ -225,27 +230,15 @@ export default function PaymentStep({
             })}
           </div>
 
-          {/* People */}
-          <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
-            <div className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <FontAwesomeIcon icon={faUsers} />
-              <span>จำนวนคน</span>
-            </div>
-
-            {!editingPeople ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center rounded-lg bg-white px-3 py-1 font-medium ring-1 ring-gray-200">
-                  {people} คน
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingPeople(true)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
-                >
-                  แก้ไขจำนวนคน
-                </button>
+          {/* People & Children */}
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {/* ผู้ใหญ่ */}
+            <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
+              <div className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <FontAwesomeIcon icon={faUsers} />
+                <span>จำนวนคน (ผู้ใหญ่)</span>
               </div>
-            ) : (
+
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -257,36 +250,37 @@ export default function PaymentStep({
                   onChange={(e) =>
                     setPeople(Math.max(1, Number(e.target.value) || 1))
                   }
-                  aria-label="จำนวนคน"
-                />
-                <button
-                  type="button"
-                  onClick={handleSavePeople}
-                  disabled={savingPeople}
-                  className="h-10 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {savingPeople ? (
-                    "กำลังบันทึก..."
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <FontAwesomeIcon icon={faFloppyDisk} />
-                      บันทึก
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPeople(peopleInitial > 0 ? peopleInitial : 1);
-                    setEditingPeople(false);
+                  onBlur={handleSavePeople}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      (e.target as HTMLInputElement).blur();
+                    }
                   }}
-                  disabled={savingPeople}
-                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-medium hover:bg-gray-50 disabled:opacity-60"
-                >
-                  ยกเลิก
-                </button>
+                  aria-label="จำนวนผู้ใหญ่"
+                />
               </div>
-            )}
+            </div>
+
+            <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
+              <div className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <FontAwesomeIcon icon={faChild} />
+                <span>เด็ก (ครึ่งราคา)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  onWheel={preventNumberScroll}
+                  className="h-10 w-28 rounded-lg border px-3 text-sm"
+                  value={children}
+                  onChange={(e) =>
+                    setChildren(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  aria-label="จำนวนเด็ก"
+                />
+              </div>
+            </div>
           </div>
         </section>
 
@@ -410,8 +404,9 @@ export default function PaymentStep({
                   : "-"}
               </span>
             </div>
+
             <div className="flex items-center justify-between">
-              <span className="text-gray-700">รวมแพ็กเกจ</span>
+              <span className="text-gray-700">รวมแพ็กเกจ (ผู้ใหญ่)</span>
               <span className="font-semibold text-indigo-700">
                 {selectedPackage
                   ? `${selectedPackage.toLocaleString()} × ${people} คน = ${(
@@ -420,11 +415,27 @@ export default function PaymentStep({
                   : "0 บาท"}
               </span>
             </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700">
+                รวมแพ็กเกจ (เด็ก • ครึ่งราคา)
+              </span>
+              <span className="font-semibold text-indigo-700">
+                {selectedPackage
+                  ? `${childUnit.toLocaleString()} × ${children} คน = ${(
+                      childUnit * children
+                    ).toLocaleString()} บาท`
+                  : "0 บาท"}
+              </span>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Ala cart</span>
               <span className="font-medium">{currency(totals.ala)}</span>
             </div>
+
             <hr className="my-1" />
+
             <div className="flex items-center justify-between">
               <span className="font-medium">รวมทั้งสิ้น</span>
               <span className="font-bold text-indigo-700">
@@ -433,6 +444,7 @@ export default function PaymentStep({
             </div>
           </div>
         </section>
+
         <section className="mb-4 rounded-xl border bg-white p-3 text-sm">
           <div className="space-y-2">
             <div className="text-xs font-medium text-gray-700">
@@ -486,9 +498,10 @@ export default function PaymentStep({
           </div>
           <div className="text-[11px] text-gray-600">
             {selectedPackage
-              ? `${selectedPackage.toLocaleString()} × ${people} คน`
+              ? `${selectedPackage.toLocaleString()} × ${people} ผู้ใหญ่`
               : `แพ็กเกจ 0`}{" "}
-            • Ala cart {totals.ala.toLocaleString()} บาท
+            • เด็ก {children} คน (คนละ {childUnit.toLocaleString()} บาท) • Ala
+            cart {totals.ala.toLocaleString()} บาท
           </div>
         </div>
 
