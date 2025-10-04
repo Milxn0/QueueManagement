@@ -15,7 +15,11 @@ import { createClient } from "@/lib/supabaseClient";
 import type { OccupiedItem, Props } from "@/types/reservationdetail";
 import { useRouter } from "next/navigation";
 import PaymentStep from "@/components/admin/PaymentStep";
-import { statusClass } from "@/utils";
+import {
+  statusClass,
+  normalizePaymentMethod,
+  paymentMethodLabel,
+} from "@/utils/status";
 import { faTriangleExclamation } from "@fortawesome/free-solid-svg-icons";
 
 const TH_TZ = "Asia/Bangkok";
@@ -623,8 +627,19 @@ export default function ReservationDetailModal({
                   <div className="text-xs text-emerald-700">
                     ช่องทางการชำระเงิน
                   </div>
-                  <div className="mt-1 font-medium text-emerald-900">
-                    {payment?.method || "—"}
+                  <div className="mt-1">
+                    {(() => {
+                      const pmKey = normalizePaymentMethod(
+                        payment?.method ?? ""
+                      );
+                      return (
+                        <span
+                          className={`className="mt-1 font-medium text-emerald-900 `}
+                        >
+                          {paymentMethodLabel(pmKey)}
+                        </span>
+                      );
+                    })()}
                   </div>
                 </div>
 
@@ -824,7 +839,10 @@ export default function ReservationDetailModal({
                     แก้ไขรายละเอียดคิว
                   </div>
                   <div className="text-[11px] text-amber-700">
-                    <span className="text-[11px] text-red-600"> *สามารถแก้ไขได้เมื่อลูกค้าบอกเท่านั้น</span>
+                    <span className="text-[11px] text-red-600">
+                      {" "}
+                      *สามารถแก้ไขได้เมื่อลูกค้าบอกเท่านั้น
+                    </span>
                   </div>
                 </div>
 
@@ -1156,6 +1174,7 @@ export default function ReservationDetailModal({
         <PaymentStep
           open={showPayment}
           onClose={() => setShowPayment(false)}
+          reservationId={row.id}
           peopleInitial={Number(row.partysize) || 1}
           onUpdatePeople={async (newPeople) => {
             const { error } = await supabase
@@ -1169,93 +1188,27 @@ export default function ReservationDetailModal({
             onUpdated?.();
           }}
           onSaved={async (payload) => {
-            const isUUID = (s?: string | null) =>
-              !!s &&
-              /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-                s
-              );
-
             try {
               setBusy(true);
 
-              const selectedPackage = Number(payload?.selectedPackage) || 0;
-              const people = Number(payload?.people) || 1;
-              const ala = Array.isArray(payload?.alaItems)
-                ? payload.alaItems
-                : [];
-              const totals = payload?.totals ?? {
-                pkg: selectedPackage * people,
-                ala: ala.reduce(
-                  (s: number, it: any) =>
-                    s + Number(it.price || 0) * Number(it.qty || 0),
-                  0
-                ),
-                sum: 0,
-              };
-              totals.sum = Number(totals.pkg || 0) + Number(totals.ala || 0);
+              const res = await fetch("/api/admin/bills/pay", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  reservationId: row.id,
+                  paymentMethod: payload?.paymentMethod,
+                  selectedPackage: payload?.selectedPackage ?? null,
+                  people: payload?.people ?? 1,
+                  alaItems: payload?.alaItems ?? [],
+                }),
+              });
 
-              const { data: billRow, error: billErr } = await supabase
-                .from("bills")
-                .upsert(
-                  {
-                    reservation_id: row.id,
-                    status: "paid",
-                    total: Number(totals.sum || 0),
-                    payment_method: payload?.paymentMethod ?? null,
-                  },
-                  { onConflict: "reservation_id" }
-                )
-                .select("id")
-                .single();
-
-              if (billErr) throw billErr;
-              const billId = billRow.id;
-
-              const { error: delErr } = await supabase
-                .from("bill_items")
-                .delete()
-                .eq("bill_id", billId);
-              if (delErr) throw delErr;
-
-              const items: any[] = [];
-
-              if (selectedPackage > 0) {
-                items.push({
-                  bill_id: billId,
-                  kind: "package",
-                  ref_id: null,
-                  name_snapshot: `Package ${selectedPackage}`,
-                  unit_price: selectedPackage,
-                  quantity: people,
-                  parent_item_id: null,
-                });
+              if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err?.error || "บันทึกบิลไม่สำเร็จ");
               }
 
-              for (const it of ala) {
-                items.push({
-                  bill_id: billId,
-                  kind: "item",
-                  ref_id: isUUID(it?.id) ? it.id : null,
-                  name_snapshot: String(it?.name ?? "Item"),
-                  unit_price: Number(it?.price || 0),
-                  quantity: Number(it?.qty || 0),
-                  parent_item_id: null,
-                });
-              }
-
-              if (items.length > 0) {
-                const { error: insErr } = await supabase
-                  .from("bill_items")
-                  .insert(items);
-                if (insErr) throw insErr;
-              }
-
-              const { error: resErr } = await supabase
-                .from("reservations")
-                .update({ status: "paid" })
-                .eq("id", row.id);
-              if (resErr) throw resErr;
-
+              // refresh UI
               setShowPayment(false);
               setOk("บันทึกการชำระเงินสำเร็จ");
               await refreshRow();

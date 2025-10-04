@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable prefer-const */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
@@ -15,7 +16,10 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faListCheck } from "@fortawesome/free-solid-svg-icons/faListCheck";
 import StatusFilter from "@/components/admin/StatusFilter";
 import type { StatusKey } from "@/types/filters";
-import { useSearchParams } from "next/navigation";
+import StatsGrid from "@/components/admin/dashboard/StatsGrid";
+import type { Totals } from "@/types/queue-manage";
+import { normalizeStatus } from "@/utils/status";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 
 export default function TodayQueuePage() {
   const supabase = useMemo(() => createClient(), []);
@@ -41,18 +45,69 @@ export default function TodayQueuePage() {
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
   const sp = useSearchParams();
+
+  const router = useRouter();
+  const pathname = usePathname();
+  const rawParam = sp?.get?.("status") ?? "";
   const statusParam = (sp?.get?.("status") as StatusKey | "") || "";
   const filteredRows = filterByStatus(rows, statusParam);
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
-    const res = await fetch("/api/admin/reservations/today", {
-      cache: "no-store",
-    });
-    const data = await res.json();
-    setRows(data);
-    setRowsLoading(false);
+    try {
+      const res = await fetch("/api/admin/reservations/today", {
+        cache: "no-store",
+      });
+
+      let payload: any = null;
+      try {
+        payload = await res.json();
+      } catch {
+        payload = null;
+      }
+
+      const rows: any[] = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+        ? payload.data
+        : [];
+
+      setRows(rows);
+
+      const tally = {
+        all: rows.length || 0,
+        waiting: 0,
+        confirmed: 0,
+        seated: 0,
+        paid: 0,
+        cancelled: 0,
+      };
+      for (const r of rows) {
+        const k = normalizeStatus?.(r?.status) ?? "";
+        if (k && k in tally) {
+          // @ts-expect-error index by key
+          tally[k] += 1;
+        }
+      }
+      setTotals(tally);
+    } finally {
+      setRowsLoading(false);
+    }
   }, []);
+
+  const setStatusParam = (key: StatusKey | "") => {
+    const params = new URLSearchParams(sp?.toString?.() ?? "");
+    if (!key) {
+      params.delete("status");
+    } else {
+      if (statusParam === key) {
+        params.delete("status");
+      } else {
+        params.set("status", key);
+      }
+    }
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
 
   // ---------- Realtime ----------
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -137,7 +192,7 @@ export default function TodayQueuePage() {
           queue_code?: string | null;
         }) => ({
           tableNo: parseTableNo(o.tbl?.table_name ?? null) ?? 0,
-          reservationId: o.id ?? "", // ใช้ตัดเป็น 6 ตัวในโมดัล
+          reservationId: o.id ?? "",
           reservation_datetime: o.reservation_datetime ?? "",
           queue_code: o.queue_code ?? null,
         })
@@ -168,6 +223,62 @@ export default function TodayQueuePage() {
   }
   const shownCount = filteredRows.length;
 
+  const [totals, setTotals] = useState<Totals>({
+    all: 0,
+    waiting: 0,
+    confirmed: 0,
+    seated: 0,
+    paid: 0,
+    cancelled: 0,
+  });
+  const statItems = useMemo(
+    () => [
+      {
+        label: "Total Queue",
+        value: totals.all,
+        subtext: "รวมทั้งหมด",
+        icon: <FontAwesomeIcon icon={faListCheck} />,
+        className: "border-sky-200 text-sky-700",
+        key: "" as const,
+      },
+      {
+        label: "Waiting",
+        value: totals.waiting,
+        subtext: "กำลังรอ",
+        className: "border-amber-200 text-amber-700",
+        key: "waiting" as const,
+      },
+      {
+        label: "Confirmed",
+        value: totals.confirmed,
+        subtext: "ยืนยันแล้ว",
+        className: "border-indigo-200 text-indigo-700",
+        key: "confirmed" as const,
+      },
+      {
+        label: "Seated",
+        value: totals.seated,
+        subtext: "กำลังนั่ง",
+        className: "border-sky-200 text-sky-700",
+        key: "seated" as const,
+      },
+      {
+        label: "Paid",
+        value: totals.paid,
+        subtext: "ชำระเงินแล้ว",
+        className: "border-emerald-200 text-emerald-700",
+        key: "paid" as const,
+      },
+      {
+        label: "Cancelled",
+        value: totals.cancelled,
+        subtext: "ยกเลิก",
+        className: "border-rose-200 text-rose-700",
+        key: "cancelled" as const,
+      },
+    ],
+    [totals]
+  );
   // ---------- UI ----------
   if (loading) {
     return (
@@ -213,7 +324,7 @@ export default function TodayQueuePage() {
 
   return (
     <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-start justify-center">
-      <main className="max-w-6xl w-full">
+      <main className="max-w-6xl w-full space-y-4">
         <section className="mb-8">
           <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/50">
             <div className="p-6">
@@ -229,6 +340,11 @@ export default function TodayQueuePage() {
           </div>
         </section>
 
+        <StatsGrid
+          items={statItems}
+          currentKey={statusParam}
+          onSelect={setStatusParam}
+        />
         <section className="bg-white rounded-2xl shadow-xl border">
           <div className="p-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between border-b">
             <div className="text-sm text-gray-600">
@@ -241,10 +357,6 @@ export default function TodayQueuePage() {
                 รายการ
                 <span className="text-gray-400"> / ทั้งหมด {rows.length}</span>
               </div>
-            </div>
-
-            <div className="w-full md:w-auto">
-              <StatusFilter />
             </div>
           </div>
 

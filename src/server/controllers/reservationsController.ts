@@ -15,17 +15,40 @@ export type UserReservationRow = {
   tbl?: { table_name: string | null } | null;
 };
 
-// สถานะการจอง
 const waiting_STATUSES = ["waiting"];
 const CONFIRMED_STATUSES = ["confirmed", "seated"];
 const CANCELLED_STATUSES = ["cancelled"];
 
+function todayBangkokRangeUTC() {
+  const nowTH = new Date(
+    new Date().toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+  );
+  const y = nowTH.getFullYear();
+  const m = nowTH.getMonth();
+  const d = nowTH.getDate();
+  const startUTC = new Date(Date.UTC(y, m, d, -7, 0, 0));
+  const endUTC = new Date(Date.UTC(y, m, d + 1, -7, 0, 0));
+  const toIsoNoMs = (dt: Date) => dt.toISOString().replace(/\.\d{3}Z$/, "Z");
+  return { startISO: toIsoNoMs(startUTC), endISO: toIsoNoMs(endUTC) };
+}
+
+function bangkokDayRangeUTC(dayISO: string) {
+  const baseTH = new Date(
+    new Date(dayISO).toLocaleString("en-US", { timeZone: "Asia/Bangkok" })
+  );
+  const y = baseTH.getFullYear();
+  const m = baseTH.getMonth();
+  const d = baseTH.getDate();
+  const startUTC = new Date(Date.UTC(y, m, d, -7, 0, 0));
+  const endUTC = new Date(Date.UTC(y, m, d + 1, -7, 0, 0));
+  const toIsoNoMs = (dt: Date) => dt.toISOString().replace(/\.\d{3}Z$/, "Z");
+  return { startISO: toIsoNoMs(startUTC), endISO: toIsoNoMs(endUTC) };
+}
+
 export async function listReservationsToday() {
   const supabase = createServiceClient();
-  const start = new Date();
-  start.setHours(0, 0, 0, 0);
-  const end = new Date();
-  end.setHours(23, 59, 59, 999);
+
+  const { startISO, endISO } = todayBangkokRangeUTC();
 
   const { data, error } = await supabase
     .from("reservations")
@@ -38,8 +61,8 @@ export async function listReservationsToday() {
   tbl:tables!reservations_table_id_fkey(table_name)
   `
     )
-    .gte("reservation_datetime", start.toISOString())
-    .lte("reservation_datetime", end.toISOString())
+    .gte("reservation_datetime", startISO)
+    .lte("reservation_datetime", endISO)
     .order("reservation_datetime", { ascending: true });
 
   if (error) {
@@ -138,32 +161,15 @@ export async function checkUserReservationQuota(
   limitPerDay = 1
 ) {
   const supabase = createServiceClient();
-  const d = new Date(dayISO);
-  const start = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    0,
-    0,
-    0,
-    0
-  );
-  const end = new Date(
-    d.getFullYear(),
-    d.getMonth(),
-    d.getDate(),
-    23,
-    59,
-    59,
-    999
-  );
+
+  const { startISO, endISO } = bangkokDayRangeUTC(dayISO);
 
   const { count, error } = await supabase
     .from("reservations")
     .select("id", { count: "exact", head: true })
     .eq("user_id", userId)
-    .gte("reservation_datetime", start.toISOString())
-    .lte("reservation_datetime", end.toISOString())
+    .gte("reservation_datetime", startISO)
+    .lte("reservation_datetime", endISO)
     .in("status", [...waiting_STATUSES, ...CONFIRMED_STATUSES]);
 
   if (error) {

@@ -16,38 +16,31 @@ import {
 export type AlaItem = { id: string; name: string; qty: number; price: number };
 
 type Props = {
+  reservationId: string;
   open: boolean;
   onClose: () => void;
   onSaved: (payload: {
-    paymentMethod: null;
+    paymentMethod: "cash" | "card" | "qr" | "transfer" | "e-wallet" | null;
     selectedPackage: number | null;
     people: number;
     alaItems: AlaItem[];
     totals: { pkg: number; ala: number; sum: number };
   }) => void;
-  /** รายการแพ็กเกจที่ให้เลือก */
   packages?: number[];
-  /** จำนวนคนเริ่มต้น (sync ทุกครั้งที่ modal เปิดใหม่) */
   peopleInitial?: number;
-  /** สถานะยุ่ง/กำลังทำงาน */
   busy?: boolean;
-  /** อัพเดตจำนวนคนลง DB (กด “บันทึกจำนวน” จะเรียก) */
   onUpdatePeople?: (newPeople: number) => Promise<void>;
-  /** ให้โมดัลแม่ refresh ข้อมูลหลังอัพเดต (เช่นจำนวนคน) */
   onRefresh?: () => Promise<void> | void;
 
-  /** ค่าเริ่มต้น (optional) – ถ้ามีการแก้ไขแล้วเปิดมาใหม่จะเติมให้ */
   initialSelectedPackage?: number | null;
   initialAlaItems?: AlaItem[];
 };
 
 const currency = (n: number) => n.toLocaleString("th-TH") + " บาท";
 
-/** ป้องกัน scroll เปลี่ยนค่าตัวเลขโดยไม่ตั้งใจ */
 const preventNumberScroll = (e: React.WheelEvent<HTMLInputElement>) =>
   (e.target as HTMLInputElement).blur();
 
-/** สุ่ม id สั้น ๆ สำหรับรายการ Ala cart */
 const rid = () => Math.random().toString(36).slice(2, 8);
 
 export default function PaymentStep({
@@ -62,6 +55,9 @@ export default function PaymentStep({
   initialSelectedPackage = null,
   initialAlaItems,
 }: Props) {
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "card" | "qr" | "transfer" | "e-wallet" | null
+  >(null);
   // ---------- local states ----------
   const [selectedPackage, setSelectedPackage] = useState<number | null>(
     initialSelectedPackage
@@ -92,6 +88,7 @@ export default function PaymentStep({
     setNewName("");
     setNewPrice("");
     setError(null);
+    setPaymentMethod(null);
   }, [open, peopleInitial, initialAlaItems, initialSelectedPackage]);
 
   // focus ชื่อเมนูทันทีเมื่อกด “เพิ่มเมนู”
@@ -154,10 +151,14 @@ export default function PaymentStep({
   const removeAlaItem = (id: string) =>
     setAlaItems((arr) => arr.filter((i) => i.id !== id));
 
-  const onSubmit = () => {
-    setError(null);
-    if (!selectedPackage && alaItems.length === 0) {
-      setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
+    const onSubmit = () => {
+     setError(null);
+     if (!selectedPackage && alaItems.length === 0) {
+       setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
+       return;
+     }
+    if (!paymentMethod) {
+      setError("กรุณาเลือกช่องทางการชำระเงิน");
       return;
     }
     onSaved({
@@ -165,7 +166,7 @@ export default function PaymentStep({
       people,
       alaItems,
       totals,
-      paymentMethod: null,
+      paymentMethod,
     });
   };
 
@@ -431,6 +432,40 @@ export default function PaymentStep({
             </div>
           </div>
         </section>
+        <section className="mb-4 rounded-xl border bg-white p-3 text-sm">
+  <div className="space-y-2">
+    <div className="text-xs font-medium text-gray-700">ช่องทางชำระเงิน</div>
+    <div className="flex flex-wrap gap-2">
+      {[
+        { key: "cash", label: "เงินสด" },
+        { key: "card", label: "บัตร" },
+        { key: "qr", label: "QR/PromptPay" },
+        { key: "transfer", label: "โอนเงิน" },
+        { key: "e-wallet", label: "E-Wallet" },
+      ].map((m) => {
+        const active = paymentMethod === (m.key as any);
+        return (
+          <button
+            key={m.key}
+            type="button"
+            onClick={() =>
+              setPaymentMethod(m.key as "cash" | "card" | "qr" | "transfer" | "e-wallet")
+            }
+            className={[
+              "rounded-xl px-3 py-1.5 text-sm font-medium border transition",
+              active
+                ? "bg-indigo-600 text-white border-indigo-600"
+                : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50",
+            ].join(" ")}
+            aria-pressed={active}
+          >
+            {m.label}
+          </button>
+        );
+      })}
+    </div>
+  </div>
+</section>
       </div>
 
       {/* Footer (sticky) */}
@@ -448,7 +483,9 @@ export default function PaymentStep({
           type="button"
           onClick={onSubmit}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-          disabled={busy || (!selectedPackage && alaItems.length === 0)}
+          disabled={
+    busy || (!selectedPackage && alaItems.length === 0) || !paymentMethod
+  }
         >
           <FontAwesomeIcon icon={faMoneyBillWave} />
           บันทึกการชำระเงิน
