@@ -44,6 +44,7 @@ const preventNumberScroll = (e: React.WheelEvent<HTMLInputElement>) =>
 const rid = () => Math.random().toString(36).slice(2, 8);
 
 export default function PaymentStep({
+  reservationId,
   open,
   onClose,
   onSaved,
@@ -70,28 +71,60 @@ export default function PaymentStep({
   );
 
   const [children, setChildren] = useState<number>(0);
-
+  const totalSeats = useMemo(
+    () => Math.max(1, Number(people) || 1) + Math.max(0, Number(children) || 0),
+    [people, children]
+  );
   const [alaItems, setAlaItems] = useState<AlaItem[]>(initialAlaItems ?? []);
   const [addingAla, setAddingAla] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState<number | "">("");
   const nameInputRef = useRef<HTMLInputElement>(null);
-
+  const [savingPeople, setSavingPeople] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const SPLIT_KEY = (rid: string) => `pay-split:${rid}`;
 
-  // sync เมื่อ modal เปิดรอบใหม่
+  const lastReservationIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!open) return;
+    const changedReservation = lastReservationIdRef.current !== reservationId;
+    if (!changedReservation) return;
+
+    try {
+      const raw = localStorage.getItem(SPLIT_KEY(reservationId));
+      if (raw) {
+        const saved = JSON.parse(raw) as { people?: number; children?: number };
+        const p = Math.max(1, Number(saved?.people) || 1);
+        const c = Math.max(0, Number(saved?.children) || 0);
+        setPeople(p);
+        setChildren(c);
+      } else {
+        setPeople(peopleInitial > 0 ? peopleInitial : 1);
+        setChildren(0);
+      }
+    } catch {
+      setPeople(peopleInitial > 0 ? peopleInitial : 1);
+      setChildren(0);
+    }
+
     setSelectedPackage(initialSelectedPackage ?? null);
     setAlaItems(initialAlaItems ?? []);
-    setPeople(peopleInitial > 0 ? peopleInitial : 1);
-    setChildren(0);
     setAddingAla(false);
     setNewName("");
     setNewPrice("");
     setError(null);
     setPaymentMethod(null);
-  }, [open, peopleInitial, initialAlaItems, initialSelectedPackage]);
+
+    lastReservationIdRef.current = reservationId;
+  }, [reservationId, peopleInitial, initialAlaItems, initialSelectedPackage]);
+
+  useEffect(() => {
+    if (!reservationId) return;
+    localStorage.setItem(
+      SPLIT_KEY(reservationId),
+      JSON.stringify({ people, children })
+    );
+  }, [reservationId, people, children]);
 
   useEffect(() => {
     if (addingAla) nameInputRef.current?.focus();
@@ -116,19 +149,16 @@ export default function PaymentStep({
   const togglePackage = (pk: number) =>
     setSelectedPackage((prev) => (prev === pk ? null : pk));
 
-  const handleSavePeople = async () => {
-    const normalized = Math.max(1, Number(people) || 1);
-    setPeople(normalized);
-    setError(null);
-
+  const handleSaveSeats = async () => {
     if (!onUpdatePeople) return;
-
     try {
-      await onUpdatePeople(normalized);
+      setSavingPeople(true);
+      await onUpdatePeople(totalSeats);
       await onRefresh?.();
     } catch (e: any) {
-      setError(e?.message || "บันทึกจำนวนคนไม่สำเร็จ");
+      setError(e?.message || "บันทึกจำนวนที่นั่งไม่สำเร็จ");
     } finally {
+      setSavingPeople(false);
     }
   };
 
@@ -250,17 +280,17 @@ export default function PaymentStep({
                   onChange={(e) =>
                     setPeople(Math.max(1, Number(e.target.value) || 1))
                   }
-                  onBlur={handleSavePeople}
+                  onBlur={handleSaveSeats}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter") {
+                    if (e.key === "Enter")
                       (e.target as HTMLInputElement).blur();
-                    }
                   }}
                   aria-label="จำนวนผู้ใหญ่"
                 />
               </div>
             </div>
 
+            {/* เด็กครึ่งราคา */}
             <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
               <div className="inline-flex items-center gap-2 text-sm text-gray-700">
                 <FontAwesomeIcon icon={faChild} />
@@ -277,6 +307,11 @@ export default function PaymentStep({
                   onChange={(e) =>
                     setChildren(Math.max(0, Number(e.target.value) || 0))
                   }
+                  onBlur={handleSaveSeats}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      (e.target as HTMLInputElement).blur();
+                  }}
                   aria-label="จำนวนเด็ก"
                 />
               </div>
@@ -497,11 +532,15 @@ export default function PaymentStep({
             รวมทั้งสิ้น {currency(totals.sum)}
           </div>
           <div className="text-[11px] text-gray-600">
+            รวมที่นั่ง {totalSeats} คน • ผู้ใหญ่ {people} คน • เด็ก {children}{" "}
+            คน
             {selectedPackage
-              ? `${selectedPackage.toLocaleString()} × ${people} ผู้ใหญ่`
-              : `แพ็กเกจ 0`}{" "}
-            • เด็ก {children} คน (คนละ {childUnit.toLocaleString()} บาท) • Ala
-            cart {totals.ala.toLocaleString()} บาท
+              ? ` • ผู้ใหญ่ ${selectedPackage.toLocaleString()} บาท`
+              : ""}
+            {selectedPackage
+              ? ` • เด็กคนละ ${childUnit.toLocaleString()} บาท`
+              : ""}
+            • Ala cart {totals.ala.toLocaleString()} บาท
           </div>
         </div>
 
