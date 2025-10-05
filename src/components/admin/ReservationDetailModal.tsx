@@ -217,6 +217,8 @@ export default function ReservationDetailModal({
   // steps
   const [cancelStep, setCancelStep] = useState<0 | 1>(0);
   const [tableStep, setTableStep] = useState<0 | 1>(0);
+  const [picked, setPicked] = useState<number[]>([]);
+
   const [editStep, setEditStep] = useState<0 | 1>(0);
 
   // edit form
@@ -234,6 +236,57 @@ export default function ReservationDetailModal({
   const [optimisticTableNo, setOptimisticTableNo] = useState<number | null>(
     currentTableNo ?? null
   );
+
+  // table cap
+  const [tableCaps, setTableCaps] = useState<Map<number, number>>(new Map());
+  const capacityInfo = (no: number) => {
+    const cap = tableCaps.get(no) ?? null;
+    const allowed = cap != null ? cap + 2 : null;
+    const size = Number(displayPartysize) || 0;
+    const over = allowed != null && size > allowed;
+    return { cap, allowed, size, over };
+  };
+
+  const allowedSum = useMemo(() => {
+    return picked.reduce((sum, no) => {
+      const cap = tableCaps.get(no) ?? 0;
+      return sum + (cap + 2);
+    }, 0);
+  }, [picked, tableCaps]);
+
+  useEffect(() => {
+    if (!open) return;
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from("tables")
+          .select("id, table_name, capacity, is_available");
+
+        if (error) return;
+
+        const caps = new Map<number, number>();
+        const nos: number[] = [];
+
+        const getNo = (name?: string | null) => {
+          const m = String(name ?? "").match(/\d+/);
+          return m ? Number(m[0]) : null;
+        };
+
+        (data ?? []).forEach((t: any) => {
+          const no = getNo(t?.table_name);
+          const cap = Number(t?.capacity ?? 0);
+          if (no != null) {
+            nos.push(no);
+            if (cap > 0) caps.set(no, cap);
+          }
+        });
+
+        nos.sort((a, b) => a - b);
+        setTableNos(nos);
+        setTableCaps(caps);
+      } catch {}
+    })();
+  }, [open, supabase]);
 
   const [confirmDelOpen, setConfirmDelOpen] = useState(false);
   const [delBusy, setDelBusy] = useState(false);
@@ -263,6 +316,10 @@ export default function ReservationDetailModal({
   const [displayComment, setDisplayComment] = useState<string | null>(
     row?.comment ?? null
   );
+  const requiredSeats = Number(displayPartysize ?? 0) || 0;
+  const need = Math.max(0, requiredSeats - allowedSum);
+  const canSave = picked.length > 0 && need === 0;
+
   const [showPkg, setShowPkg] = useState(false);
   const [payment, setPayment] = useState<{
     method: string | null;
@@ -274,8 +331,7 @@ export default function ReservationDetailModal({
     pkgSubtotal: number;
     alaSubtotal: number;
   } | null>(null);
-
-  const tables = useMemo(() => Array.from({ length: 17 }, (_, i) => i + 1), []);
+  const [tableNos, setTableNos] = useState<number[]>([]);
   const occByTable = useMemo(() => {
     const m = new Map<number, OccupiedItem>();
     (occupied ?? []).forEach((o) => m.set(o.tableNo, o));
@@ -383,6 +439,14 @@ export default function ReservationDetailModal({
 
   const doPickTable = async (no: number) => {
     if (busy) return;
+
+    const cap = capacityInfo(no);
+    if (cap.over) {
+      showError(
+        `จำนวนที่นั่ง ${cap.size} คน เกินความจุของโต๊ะ ${no} (รองรับ ${cap.cap} คน • อนุโลม +2 = สูงสุด ${cap.allowed} คน)`
+      );
+      return;
+    }
 
     if (normStatus === "paid") {
       showError("ออเดอร์นี้ชำระเงินแล้ว ไม่สามารถเลือกหรือย้ายโต๊ะได้");
@@ -881,9 +945,7 @@ export default function ReservationDetailModal({
                     </label>
                     <input
                       type="datetime-local"
-                      value={toInputLocal(
-                        parseDate(displayDatetime ?? null) || new Date()
-                      )}
+                      value={editDate}
                       onChange={(e) => setEditDate(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                     />
@@ -897,7 +959,7 @@ export default function ReservationDetailModal({
                       type="number"
                       min={1}
                       max={50}
-                      value={String(displayPartysize ?? "")}
+                      value={editSize}
                       onChange={(e) => setEditSize(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       placeholder="เช่น 2"
@@ -909,7 +971,7 @@ export default function ReservationDetailModal({
                       ข้อมูลเพิ่มเติม
                     </label>
                     <input
-                      value={String(displayComment ?? "")}
+                      value={editComment}
                       onChange={(e) => setEditComment(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm focus:border-amber-500 focus:ring-amber-500"
                       placeholder="แก้ไขข้อมูลเพิ่มเติม"
@@ -943,33 +1005,44 @@ export default function ReservationDetailModal({
               <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
                 <div className="mb-2 flex items-center justify-between">
                   <div className="text-sm font-semibold text-indigo-800">
-                    เลือกโต๊ะ (1–17)
+                    เลือกโต๊ะ
                   </div>
-                  <div className="text-[11px] text-indigo-100 sm:text-indigo-600">
-                    เงื่อนไข: คิวต้องห่างกันอย่างน้อย 2 ชม.
+                  <div className="text-[11px] text-indigo-600">
+                    เงื่อนไข: รวมความจุ (cap+2) ≥ จำนวนที่นั่ง •
+                    หลีกเลี่ยงชนเวลา 2 ชม.
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
-                  {tables.map((no) => {
+                  {tableNos.map((no) => {
                     const occ = occByTable.get(no);
                     const conflict = conflictMessage(no) !== null;
-                    const curNo = optimisticTableNo ?? currentTableNo;
-                    const isCurrent = curNo === no;
+                    const pickedNow = picked.includes(no);
+                    const cap = tableCaps.get(no) ?? null;
+                    const allowed = cap != null ? cap + 2 : null;
 
+                    const togglePick = (no: number) => {
+                      setPicked((arr) =>
+                        arr.includes(no)
+                          ? arr.filter((x) => x !== no)
+                          : [...arr, no]
+                      );
+                    };
                     return (
                       <button
                         key={no}
-                        onClick={() => doPickTable(no)}
-                        disabled={busy || conflict || isCurrent}
+                        onClick={() => togglePick(no)}
+                        disabled={busy || conflict || !!occ}
                         className={[
                           "rounded-xl border px-3 py-2 text-left transition",
-                          isCurrent
-                            ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+                          pickedNow
+                            ? "border-indigo-300 bg-indigo-50 text-indigo-800"
                             : occ
                             ? "border-rose-300 bg-rose-50 text-rose-700"
                             : "border-slate-200 bg-white hover:bg-slate-50",
-                          conflict ? "opacity-60" : "",
+                          conflict || !!occ
+                            ? "opacity-60 cursor-not-allowed"
+                            : "",
                         ].join(" ")}
                         title={
                           conflict
@@ -983,22 +1056,34 @@ export default function ReservationDetailModal({
                       >
                         <div className="text-sm font-semibold">โต๊ะ {no}</div>
                         <div className="text-[11px]">
-                          {isCurrent
-                            ? fromManageQueue
-                              ? "โต๊ะที่นั่ง"
-                              : "โต๊ะปัจจุบัน"
+                          {pickedNow
+                            ? "เลือกแล้ว"
                             : occ
                             ? ` ${showOccCode(occ)}`
                             : "ว่าง"}
                         </div>
-                        {occ && (
-                          <div className="text-[11px] text-slate-500">
-                            {formatTime(occ.reservation_datetime)}
+                        {cap != null && (
+                          <div className="mt-0.5 text-[10px] text-slate-500">
+                            ความจุ {cap} • (สูงสุด {allowed})
                           </div>
                         )}
                       </button>
                     );
                   })}
+                </div>
+
+                {/* Summary */}
+                <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-indigo-100">
+                  รวมความจุที่อนุโลม: <b>{allowedSum}</b> คน • ต้องการ{" "}
+                  <b>{requiredSeats}</b> คน
+                  {need > 0 ? (
+                    <span className="text-rose-600">
+                      {" "}
+                      • ยังขาดอีก {need} คน
+                    </span>
+                  ) : (
+                    <span className="text-emerald-600"> • เพียงพอ</span>
+                  )}
                 </div>
 
                 <div className="mt-4 flex justify-end gap-2">
@@ -1008,8 +1093,43 @@ export default function ReservationDetailModal({
                     className="inline-flex items-center gap-2 rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
                     disabled={busy}
                   >
-                    <FontAwesomeIcon icon={faArrowLeft} />
-                    ย้อนกลับ
+                    กลับ
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!canSave || busy}
+                    onClick={async () => {
+                      try {
+                        setBusy(true);
+                        const res = await fetch(
+                          `/api/admin/reservations/${row.id}/assign-tables`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({
+                              tableNos: picked,
+                              partySize: Number(displayPartysize) || 0,
+                            }),
+                          }
+                        );
+                        if (!res.ok) {
+                          const err = await res.json().catch(() => ({}));
+                          throw new Error(err?.error || "จัดโต๊ะไม่สำเร็จ");
+                        }
+                        // success
+                        setLocalStatus("seated");
+                        setOptimisticTableNo(null);
+                        setTableStep(0);
+                        onUpdated?.();
+                      } catch (e: any) {
+                        showError(e?.message || "จัดโต๊ะไม่สำเร็จ");
+                      } finally {
+                        setBusy(false);
+                      }
+                    }}
+                    className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
+                  >
+                    บันทึกโต๊ะที่เลือก
                   </button>
                 </div>
               </div>
