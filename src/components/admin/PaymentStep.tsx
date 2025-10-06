@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
@@ -9,48 +10,42 @@ import {
   faUsers,
   faBowlFood,
   faArrowLeft,
-  faFloppyDisk,
   faMoneyBillWave,
+  faChild,
 } from "@fortawesome/free-solid-svg-icons";
 
 export type AlaItem = { id: string; name: string; qty: number; price: number };
 
 type Props = {
+  reservationId: string;
   open: boolean;
   onClose: () => void;
   onSaved: (payload: {
-    paymentMethod: null;
+    paymentMethod: "cash" | "card" | "qr" | "transfer" | "e-wallet" | null;
     selectedPackage: number | null;
-    people: number;
+    people: number; // ผู้ใหญ่
     alaItems: AlaItem[];
     totals: { pkg: number; ala: number; sum: number };
+    children: number;
+    childUnit: number;
   }) => void;
-  /** รายการแพ็กเกจที่ให้เลือก */
   packages?: number[];
-  /** จำนวนคนเริ่มต้น (sync ทุกครั้งที่ modal เปิดใหม่) */
   peopleInitial?: number;
-  /** สถานะยุ่ง/กำลังทำงาน */
   busy?: boolean;
-  /** อัพเดตจำนวนคนลง DB (กด “บันทึกจำนวน” จะเรียก) */
   onUpdatePeople?: (newPeople: number) => Promise<void>;
-  /** ให้โมดัลแม่ refresh ข้อมูลหลังอัพเดต (เช่นจำนวนคน) */
   onRefresh?: () => Promise<void> | void;
 
-  /** ค่าเริ่มต้น (optional) – ถ้ามีการแก้ไขแล้วเปิดมาใหม่จะเติมให้ */
   initialSelectedPackage?: number | null;
   initialAlaItems?: AlaItem[];
 };
 
 const currency = (n: number) => n.toLocaleString("th-TH") + " บาท";
-
-/** ป้องกัน scroll เปลี่ยนค่าตัวเลขโดยไม่ตั้งใจ */
 const preventNumberScroll = (e: React.WheelEvent<HTMLInputElement>) =>
   (e.target as HTMLInputElement).blur();
-
-/** สุ่ม id สั้น ๆ สำหรับรายการ Ala cart */
 const rid = () => Math.random().toString(36).slice(2, 8);
 
 export default function PaymentStep({
+  reservationId,
   open,
   onClose,
   onSaved,
@@ -62,48 +57,92 @@ export default function PaymentStep({
   initialSelectedPackage = null,
   initialAlaItems,
 }: Props) {
+  const [paymentMethod, setPaymentMethod] = useState<
+    "cash" | "card" | "qr" | "transfer" | "e-wallet" | null
+  >(null);
+
   // ---------- local states ----------
   const [selectedPackage, setSelectedPackage] = useState<number | null>(
     initialSelectedPackage
   );
 
+  // ผู้ใหญ่
   const [people, setPeople] = useState<number>(
     Number.isFinite(peopleInitial) && peopleInitial > 0 ? peopleInitial : 1
   );
-  const [editingPeople, setEditingPeople] = useState(false);
-  const [savingPeople, setSavingPeople] = useState(false);
 
+  const [children, setChildren] = useState<number>(0);
+  const totalSeats = useMemo(
+    () => Math.max(1, Number(people) || 1) + Math.max(0, Number(children) || 0),
+    [people, children]
+  );
   const [alaItems, setAlaItems] = useState<AlaItem[]>(initialAlaItems ?? []);
   const [addingAla, setAddingAla] = useState(false);
   const [newName, setNewName] = useState("");
   const [newPrice, setNewPrice] = useState<number | "">("");
   const nameInputRef = useRef<HTMLInputElement>(null);
-
+  const [savingPeople, setSavingPeople] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const SPLIT_KEY = (rid: string) => `pay-split:${rid}`;
 
-  // sync เมื่อ modal เปิดรอบใหม่
+  const lastReservationIdRef = useRef<string | null>(null);
+
   useEffect(() => {
-    if (!open) return;
+    const changedReservation = lastReservationIdRef.current !== reservationId;
+    if (!changedReservation) return;
+
+    try {
+      const raw = localStorage.getItem(SPLIT_KEY(reservationId));
+      if (raw) {
+        const saved = JSON.parse(raw) as { people?: number; children?: number };
+        const p = Math.max(1, Number(saved?.people) || 1);
+        const c = Math.max(0, Number(saved?.children) || 0);
+        setPeople(p);
+        setChildren(c);
+      } else {
+        setPeople(peopleInitial > 0 ? peopleInitial : 1);
+        setChildren(0);
+      }
+    } catch {
+      setPeople(peopleInitial > 0 ? peopleInitial : 1);
+      setChildren(0);
+    }
+
     setSelectedPackage(initialSelectedPackage ?? null);
     setAlaItems(initialAlaItems ?? []);
-    setPeople(peopleInitial > 0 ? peopleInitial : 1);
-    setEditingPeople(false);
     setAddingAla(false);
     setNewName("");
     setNewPrice("");
     setError(null);
-  }, [open, peopleInitial, initialAlaItems, initialSelectedPackage]);
+    setPaymentMethod(null);
 
-  // focus ชื่อเมนูทันทีเมื่อกด “เพิ่มเมนู”
+    lastReservationIdRef.current = reservationId;
+  }, [reservationId, peopleInitial, initialAlaItems, initialSelectedPackage]);
+
+  useEffect(() => {
+    if (!reservationId) return;
+    localStorage.setItem(
+      SPLIT_KEY(reservationId),
+      JSON.stringify({ people, children })
+    );
+  }, [reservationId, people, children]);
+
   useEffect(() => {
     if (addingAla) nameInputRef.current?.focus();
   }, [addingAla]);
 
+  const childUnit = useMemo(
+    () => (selectedPackage ? Math.round(selectedPackage / 2) : 0),
+    [selectedPackage]
+  );
+
   const totals = useMemo(() => {
-    const pkg = (selectedPackage ?? 0) * (people || 0);
+    const pkgAdults = (selectedPackage ?? 0) * (people || 0);
+    const pkgChildren = childUnit * (children || 0);
+    const pkg = pkgAdults + pkgChildren;
     const ala = (alaItems ?? []).reduce((s, i) => s + i.price * i.qty, 0);
     return { pkg, ala, sum: pkg + ala };
-  }, [selectedPackage, people, alaItems]);
+  }, [selectedPackage, people, children, alaItems, childUnit]);
 
   if (!open) return null;
 
@@ -111,22 +150,14 @@ export default function PaymentStep({
   const togglePackage = (pk: number) =>
     setSelectedPackage((prev) => (prev === pk ? null : pk));
 
-  const handleSavePeople = async () => {
-    const normalized = Math.max(1, Number(people) || 1);
-    setPeople(normalized);
-    setError(null);
-
-    if (!onUpdatePeople) {
-      setEditingPeople(false);
-      return;
-    }
+  const handleSaveSeats = async () => {
+    if (!onUpdatePeople) return;
     try {
       setSavingPeople(true);
-      await onUpdatePeople(normalized);
+      await onUpdatePeople(totalSeats);
       await onRefresh?.();
-      setEditingPeople(false);
     } catch (e: any) {
-      setError(e?.message || "บันทึกจำนวนคนไม่สำเร็จ");
+      setError(e?.message || "บันทึกจำนวนที่นั่งไม่สำเร็จ");
     } finally {
       setSavingPeople(false);
     }
@@ -160,12 +191,18 @@ export default function PaymentStep({
       setError("กรุณาเลือกแพ็กเกจอย่างน้อย 1 อย่าง หรือเพิ่มเมนู Ala cart");
       return;
     }
+    if (!paymentMethod) {
+      setError("กรุณาเลือกช่องทางการชำระเงิน");
+      return;
+    }
     onSaved({
       selectedPackage,
       people,
       alaItems,
       totals,
-      paymentMethod: null,
+      paymentMethod,
+      children,
+      childUnit,
     });
   };
 
@@ -186,7 +223,8 @@ export default function PaymentStep({
         {error && (
           <div
             role="alert"
-            className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+            aria-live="polite"
+            className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
           >
             {error}
           </div>
@@ -223,27 +261,15 @@ export default function PaymentStep({
             })}
           </div>
 
-          {/* People */}
-          <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
-            <div className="inline-flex items-center gap-2 text-sm text-gray-700">
-              <FontAwesomeIcon icon={faUsers} />
-              <span>จำนวนคน</span>
-            </div>
-
-            {!editingPeople ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center rounded-lg bg-white px-3 py-1 font-medium ring-1 ring-gray-200">
-                  {people} คน
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setEditingPeople(true)}
-                  className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-gray-50"
-                >
-                  แก้ไขจำนวนคน
-                </button>
+          {/* People & Children */}
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            {/* ผู้ใหญ่ */}
+            <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
+              <div className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <FontAwesomeIcon icon={faUsers} />
+                <span>จำนวนคน (ผู้ใหญ่)</span>
               </div>
-            ) : (
+
               <div className="flex items-center gap-2">
                 <input
                   type="number"
@@ -255,36 +281,42 @@ export default function PaymentStep({
                   onChange={(e) =>
                     setPeople(Math.max(1, Number(e.target.value) || 1))
                   }
-                  aria-label="จำนวนคน"
-                />
-                <button
-                  type="button"
-                  onClick={handleSavePeople}
-                  disabled={savingPeople}
-                  className="h-10 rounded-lg bg-indigo-600 px-3 text-xs font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
-                >
-                  {savingPeople ? (
-                    "กำลังบันทึก..."
-                  ) : (
-                    <span className="inline-flex items-center gap-2">
-                      <FontAwesomeIcon icon={faFloppyDisk} />
-                      บันทึก
-                    </span>
-                  )}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setPeople(peopleInitial > 0 ? peopleInitial : 1);
-                    setEditingPeople(false);
+                  onBlur={handleSaveSeats}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      (e.target as HTMLInputElement).blur();
                   }}
-                  disabled={savingPeople}
-                  className="h-10 rounded-lg border border-gray-300 bg-white px-3 text-xs font-medium hover:bg-gray-50 disabled:opacity-60"
-                >
-                  ยกเลิก
-                </button>
+                  aria-label="จำนวนผู้ใหญ่"
+                />
               </div>
-            )}
+            </div>
+
+            {/* เด็กครึ่งราคา */}
+            <div className="mt-4 grid gap-2 sm:grid-cols-[auto,1fr] sm:items-center">
+              <div className="inline-flex items-center gap-2 text-sm text-gray-700">
+                <FontAwesomeIcon icon={faChild} />
+                <span>เด็ก (ครึ่งราคา)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  type="number"
+                  min={0}
+                  inputMode="numeric"
+                  onWheel={preventNumberScroll}
+                  className="h-10 w-28 rounded-lg border px-3 text-sm"
+                  value={children}
+                  onChange={(e) =>
+                    setChildren(Math.max(0, Number(e.target.value) || 0))
+                  }
+                  onBlur={handleSaveSeats}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter")
+                      (e.target as HTMLInputElement).blur();
+                  }}
+                  aria-label="จำนวนเด็ก"
+                />
+              </div>
+            </div>
           </div>
         </section>
 
@@ -408,8 +440,9 @@ export default function PaymentStep({
                   : "-"}
               </span>
             </div>
+
             <div className="flex items-center justify-between">
-              <span className="text-gray-700">รวมแพ็กเกจ</span>
+              <span className="text-gray-700">รวมแพ็กเกจ (ผู้ใหญ่)</span>
               <span className="font-semibold text-indigo-700">
                 {selectedPackage
                   ? `${selectedPackage.toLocaleString()} × ${people} คน = ${(
@@ -418,11 +451,27 @@ export default function PaymentStep({
                   : "0 บาท"}
               </span>
             </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-gray-700">
+                รวมแพ็กเกจ (เด็ก • ครึ่งราคา)
+              </span>
+              <span className="font-semibold text-indigo-700">
+                {selectedPackage
+                  ? `${childUnit.toLocaleString()} × ${children} คน = ${(
+                      childUnit * children
+                    ).toLocaleString()} บาท`
+                  : "0 บาท"}
+              </span>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="text-gray-700">Ala cart</span>
               <span className="font-medium">{currency(totals.ala)}</span>
             </div>
+
             <hr className="my-1" />
+
             <div className="flex items-center justify-between">
               <span className="font-medium">รวมทั้งสิ้น</span>
               <span className="font-bold text-indigo-700">
@@ -431,10 +480,71 @@ export default function PaymentStep({
             </div>
           </div>
         </section>
+
+        <section className="mb-4 rounded-xl border bg-white p-3 text-sm">
+          <div className="space-y-2">
+            <div className="text-xs font-medium text-gray-700">
+              ช่องทางชำระเงิน
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { key: "cash", label: "เงินสด" },
+                { key: "card", label: "บัตร" },
+                { key: "qr", label: "QR/PromptPay" },
+                { key: "transfer", label: "โอนเงิน" },
+                { key: "e-wallet", label: "E-Wallet" },
+              ].map((m) => {
+                const active = paymentMethod === (m.key as any);
+                return (
+                  <button
+                    key={m.key}
+                    type="button"
+                    onClick={() =>
+                      setPaymentMethod(
+                        m.key as
+                          | "cash"
+                          | "card"
+                          | "qr"
+                          | "transfer"
+                          | "e-wallet"
+                      )
+                    }
+                    className={[
+                      "rounded-xl px-3 py-1.5 text-sm font-medium border transition",
+                      active
+                        ? "bg-indigo-600 text-white border-indigo-600"
+                        : "bg-white text-indigo-700 border-indigo-300 hover:bg-indigo-50",
+                    ].join(" ")}
+                    aria-pressed={active}
+                  >
+                    {m.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </section>
       </div>
 
       {/* Footer (sticky) */}
-      <div className="sticky bottom-0 flex flex-none justify-end gap-2 border-t bg-white/70 px-4 py-3 backdrop-blur">
+      <div className="sticky bottom-0 flex flex-none items-center gap-3 border-t bg-white/70 px-4 py-3 backdrop-blur">
+        <div className="mr-auto text-sm leading-tight">
+          <div className="font-semibold">
+            รวมทั้งสิ้น {currency(totals.sum)}
+          </div>
+          <div className="text-[11px] text-gray-600">
+            รวมที่นั่ง {totalSeats} คน • ผู้ใหญ่ {people} คน • เด็ก {children}{" "}
+            คน
+            {selectedPackage
+              ? ` • ผู้ใหญ่ ${selectedPackage.toLocaleString()} บาท`
+              : ""}
+            {selectedPackage
+              ? ` • เด็กคนละ ${childUnit.toLocaleString()} บาท`
+              : ""}
+            • Ala cart {totals.ala.toLocaleString()} บาท
+          </div>
+        </div>
+
         <button
           type="button"
           onClick={onClose}
@@ -448,7 +558,11 @@ export default function PaymentStep({
           type="button"
           onClick={onSubmit}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-          disabled={busy || (!selectedPackage && alaItems.length === 0)}
+          disabled={
+            busy ||
+            (!selectedPackage && alaItems.length === 0) ||
+            !paymentMethod
+          }
         >
           <FontAwesomeIcon icon={faMoneyBillWave} />
           บันทึกการชำระเงิน

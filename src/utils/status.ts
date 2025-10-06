@@ -1,4 +1,5 @@
 export type StatusKey =
+  | ""
   | "waiting"
   | "confirmed"
   | "confirm"
@@ -33,4 +34,73 @@ export function statusLabel(s: string | null) {
   const v = (s ?? "").toLowerCase();
   if (v.includes("cancel")) return STATUS.cancelled.label;
   return STATUS[v]?.label ?? FALLBACK.label;
+}
+
+export function normalizeStatus(s: string | null | undefined): StatusKey {
+  const v = (s ?? "").toLowerCase().trim();
+  if (!v) return "";
+  if (v.includes("cancel")) return "cancelled";
+  if (v.startsWith("seat")) return "seated";
+  if (v.startsWith("confirm")) return "confirmed";
+  if (v.startsWith("paid") || v.startsWith("pay")) return "paid";
+  if (v.startsWith("wait")) return "waiting";
+  return "" as StatusKey;
+}
+
+
+// ----- Payment Method -----
+
+export type PaymentMethodKey =
+  | "cash"
+  | "card"
+  | "qr"
+  | "transfer"
+  | "e-wallet"
+  | ""; 
+
+export function normalizePaymentMethod(
+  s: string | null | undefined
+): PaymentMethodKey {
+  const v = (s ?? "")
+    .toLowerCase()
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/_/g, "-");
+
+  if (!v) return "";
+
+  if (["cash", "card", "qr", "transfer", "e-wallet"].includes(v)) {
+    return v as PaymentMethodKey;
+  }
+
+  if (v === "promptpay" || v === "qrcode" || v === "qrpay") return "qr";
+  if (
+    v === "credit" ||
+    v === "debit" ||
+    v === "creditcard" ||
+    v === "debitcard" ||
+    v === "cardpay"
+  )
+    return "card";
+  if (v === "bank" || v === "ibanking" || v === "transfermoney") return "transfer";
+  if (v === "ewallet" || v === "wallet" || v === "e-walletpay") return "e-wallet";
+
+  return "" as PaymentMethodKey;
+}
+
+export function paymentMethodLabel(k: PaymentMethodKey): string {
+  switch (k) {
+    case "cash":
+      return "เงินสด";
+    case "card":
+      return "บัตร";
+    case "qr":
+      return "QR / PromptPay";
+    case "transfer":
+      return "โอนเงิน";
+    case "e-wallet":
+      return "E-Wallet";
+    default:
+      return "-";
+  }
 }

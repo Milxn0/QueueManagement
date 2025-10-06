@@ -122,7 +122,6 @@ export default function AnalyticsPage() {
           <div className="flex flex-wrap items-center gap-3">
             {/* dataset segmented */}
             <DatasetTabs dataset={dataset} onChange={setDataset} />
-
             {dataset === "users" && (
               <UserSearchBox
                 value={name}
