@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -35,14 +35,19 @@ export default function HomePage() {
       setErr(null);
       setLoading(true);
       try {
+        // เวลาอ้างอิง
+        const now = new Date();
+
+        // ผ่อนผัน 10 นาที
+        const grace = new Date(now.getTime() - 10 * 60 * 1000);
+        const graceIso = grace.toISOString();
+
         // 1) ผู้ใช้ปัจจุบัน
         const { data: u } = await supabase.auth.getUser();
         const uid = u.user?.id ?? null;
         if (mounted) setUserId(uid);
 
-        const nowIso = new Date().toISOString();
-
-        // 2) คิวของฉัน (ทั้งหมดที่ยังไม่ถึงเวลา)
+        // 2) คิวของฉัน (หน่วง 10 นาที)
         if (uid) {
           const { data: mine, error: mineErr } = await supabase
             .from("reservations")
@@ -51,29 +56,40 @@ export default function HomePage() {
             )
             .eq("user_id", uid)
             .in("status", ["waiting", "confirmed"])
-            .gte("reservation_datetime", nowIso)
+            .gte("reservation_datetime", graceIso) 
             .order("reservation_datetime", { ascending: true })
             .order("created_at", { ascending: true });
 
           if (mineErr) throw mineErr;
-          if (mounted) setMyReservations(mine ?? []);
+
+          // กรองซ้ำฝั่ง client
+          const safeMine = (mine ?? []).filter(
+            (r: { reservation_datetime: string | number | Date }) =>
+              new Date(r.reservation_datetime).getTime() >= grace.getTime()
+          );
+          if (mounted) setMyReservations(safeMine);
         } else {
           if (mounted) setMyReservations([]);
         }
 
-        // 3) คิวถัดไป (เฉพาะ confirmed)
+        // 3) คิวถัดไป (เฉพาะ confirmed) — หน่วง 10 นาที
         const { data: conf, error: confErr } = await supabase
           .from("reservations")
           .select(
             "id,user_id,reservation_datetime,queue_code,status,created_at"
           )
           .eq("status", "confirmed")
-          .gte("reservation_datetime", nowIso)
+          .gte("reservation_datetime", graceIso)
           .order("reservation_datetime", { ascending: true })
           .order("created_at", { ascending: true });
 
         if (confErr) throw confErr;
-        if (mounted) setConfirmedQueues(conf ?? []);
+
+        const safeConf = (conf ?? []).filter(
+          (r: { reservation_datetime: string | number | Date }) =>
+            new Date(r.reservation_datetime).getTime() >= grace.getTime()
+        );
+        if (mounted) setConfirmedQueues(safeConf);
       } catch (e: any) {
         if (mounted) setErr(e?.message || "โหลดข้อมูลไม่สำเร็จ");
       } finally {
@@ -84,7 +100,7 @@ export default function HomePage() {
     load();
 
     const { data: auth } = supabase.auth.onAuthStateChange(
-      (_e: any, s: { user: { id: any } }) => {
+      (_e: any, s: any) => {
         setUserId(s?.user?.id ?? null);
       }
     );
@@ -101,13 +117,6 @@ export default function HomePage() {
     const idx = confirmedQueues.findIndex((q) => q.id === r.id);
     return idx >= 0 ? idx : null;
   };
-
-  // คิวถัดไป
-  const otherQueues = useMemo(() => {
-    if (myReservations.length === 0) return confirmedQueues;
-    const mineIds = new Set(myReservations.map((m) => m.id));
-    return confirmedQueues.filter((q) => !mineIds.has(q.id));
-  }, [confirmedQueues, myReservations]);
 
   const fmtTime = (iso?: string | null) => {
     if (!iso) return "-";
@@ -194,14 +203,38 @@ export default function HomePage() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-sm text-gray-500">ถึงคิวฉันในอีก</p>
-                        <p className="text-lg font-semibold text-emerald-600">
-                          {(r.status ?? "").toLowerCase() === "waiting"
-                            ? "รอพนักงานคอนเฟิร์ม"
-                            : typeof idx === "number"
-                            ? `${idx} คิว`
-                            : "-"}
-                        </p>
+                        {(r.status ?? "").toLowerCase() === "waiting" ? (
+                          <p className="text-lg font-semibold text-amber-600">
+                            รอพนักงานคอนเฟิร์ม
+                          </p>
+                        ) : typeof idx === "number" && idx === 0 ? (
+                          <div>
+                            <p className="text-lg font-semibold text-emerald-600">
+                              คิวปัจจุบันคือคิวของคุณ
+                            </p>
+                            <p className="text-xs text-amber-600 mt-1">
+                              กรุณารายงานตัวกับพนักงานภายใน 10 นาที
+                            </p>
+                          </div>
+                        ) : typeof idx === "number" ? (
+                          <>
+                            <p className="text-sm text-gray-500">
+                              ถึงคิวในอีก
+                            </p>
+                            <p className="text-lg font-semibold text-emerald-600">
+                              {idx} คิว
+                            </p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-500">
+                              ถึงคิวในอีก
+                            </p>
+                            <p className="text-lg font-semibold text-emerald-600">
+                              -
+                            </p>
+                          </>
+                        )}
                       </div>
                     </li>
                   );
@@ -212,7 +245,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* คิวถัดไป (เฉพาะที่ยืนยันแล้ว) */}
+      {/* คิวทั้งหมด (เฉพาะที่ยืนยันแล้ว) */}
       <section className="space-y-4">
         <h2 className="text-lg font-medium">คิวทั้งหมด</h2>
 
@@ -220,25 +253,60 @@ export default function HomePage() {
           <div className="rounded-xl border px-4 py-5 text-sm text-gray-500">
             กำลังโหลด…
           </div>
-        ) : otherQueues.length === 0 ? (
+        ) : confirmedQueues.length === 0 ? (
           <div className="rounded-xl border px-4 py-5 text-sm text-gray-500">
             ยังไม่มีคิวในระบบ
           </div>
         ) : (
           <ul className="divide-y rounded-xl border overflow-hidden">
-            {otherQueues.map((q) => (
-              <li
-                key={q.id}
-                className="px-4 py-3 flex items-center justify-between hover:bg-gray-50 transition"
-              >
-                <span className="font-semibold text-indigo-600">
-                  {q.queue_code ?? "-"}
-                </span>
-                <span className="text-sm text-gray-600">
-                  {fmtTime(q.reservation_datetime)}
-                </span>
-              </li>
-            ))}
+            {confirmedQueues.map((q, i) => {
+              const isMine = q.user_id === userId;
+              return (
+                <li
+                  key={q.id}
+                  className={[
+                    "px-4 py-3 flex items-center justify-between transition",
+                    isMine ? "bg-indigo-50/70" : "hover:bg-gray-50",
+                  ].join(" ")}
+                >
+                  <div className="flex items-center gap-3">
+                    {/* ลำดับคิว 1-based */}
+                    <span
+                      className={[
+                        "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold",
+                        isMine
+                          ? "border-indigo-400 text-indigo-700"
+                          : "border-gray-300 text-gray-600",
+                      ].join(" ")}
+                      title="ลำดับคิว"
+                    >
+                      {i + 1}
+                    </span>
+
+                    {/* รหัสคิว */}
+                    <span
+                      className={
+                        isMine
+                          ? "font-semibold text-indigo-700"
+                          : "font-semibold text-indigo-600"
+                      }
+                    >
+                      {q.queue_code ?? "-"}
+                    </span>
+
+                    {isMine && (
+                      <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                        คิวของคุณ
+                      </span>
+                    )}
+                  </div>
+
+                  <span className="text-sm text-gray-600">
+                    {fmtTime(q.reservation_datetime)}
+                  </span>
+                </li>
+              );
+            })}
           </ul>
         )}
       </section>

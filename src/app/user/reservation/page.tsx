@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Toast from "@/components/ui/Toast";
 import { useAuth } from "@/hooks/useAuth";
@@ -49,13 +49,42 @@ export default function ReservationPage() {
   const [queueCode, setQueueCode] = useState<string | null>(null);
 
   // ------ Prefill & defaults ------
-  useEffect(() => {
-    if (profile) {
-      setFullName((v) => (v ? v : profile.name ?? ""));
-      setPhone((v) => (v ? v : profile.phone ?? ""));
-      setEmail((v) => (v ? v : profile.email ?? ""));
-    }
-  }, [profile]);
+  const fetchedRef = useRef(false);
+  const lastFetchedForRef = useRef<string | null>(null);
+
+   useEffect(() => {
+    if (authLoading) return;
+    if (!user?.id) return;
+    if (lastFetchedForRef.current === user.id) return;
+    const controller = new AbortController();
+
+    (async () => {
+      try {
+        const res = await fetch("/api/user/autofill", {
+          cache: "no-store",
+          signal: controller.signal,
+          credentials: "include",
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          return;
+        }
+
+        const { name, phone: p, email: em } = await res.json();
+        setFullName((v) => (v ? v : name ?? ""));
+        setPhone((v) => (v ? v : p ?? ""));
+        setEmail((v) => (v ? v : em ?? ""));
+
+        lastFetchedForRef.current = user.id;
+      } catch (e: any) {
+        if (e?.name !== "AbortError") {
+          console.error("[autofill] fetch failed", e);
+        }
+      }
+    })();
+
+    return () => controller.abort();
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     if (!dateTime) {

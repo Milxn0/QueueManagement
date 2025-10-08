@@ -762,8 +762,10 @@ export default function ReservationDetailModal({
               </div>
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <p className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</p>
-                <p className="mt-0.5">
-                  {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
+                <p className="mt-0.5 whitespace-pre-wrap">
+                  {typeof displayComment === "string" && displayComment.trim()
+                    ? displayComment
+                    : "ไม่มีข้อมูลเพิ่มเติม"}
                 </p>
               </div>
             </section>
