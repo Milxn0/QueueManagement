@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use server";
 
@@ -47,27 +48,24 @@ function bangkokDayRangeUTC(dayISO: string) {
 
 export async function listReservationsToday() {
   const supabase = createServiceClient();
-
   const { startISO, endISO } = todayBangkokRangeUTC();
 
   const { data, error } = await supabase
     .from("reservations")
     .select(
       `
-  id, user_id, reservation_datetime, partysize, queue_code, comment, status, created_at, table_id,
-  user:users!reservations_user_id_fkey(name, phone, email),
-  cancelled_at, cancelled_reason,
-  cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
-  tbl:tables!reservations_table_id_fkey(table_name)
-  `
+      id, user_id, reservation_datetime, partysize, queue_code, comment, status, created_at, table_id,
+      user:users!reservations_user_id_fkey(name, phone, email),
+      cancelled_at, cancelled_reason,
+      cancelled_by:users!reservations_cancelled_by_user_id_fkey(name, role),
+      tbl:tables!reservations_table_id_fkey(table_name)
+    `
     )
     .gte("reservation_datetime", startISO)
     .lte("reservation_datetime", endISO)
     .order("reservation_datetime", { ascending: true });
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
   return data ?? [];
 }
 
@@ -77,11 +75,7 @@ export async function confirmReservation(id: string) {
     .from("reservations")
     .update({ status: "confirmed" })
     .eq("id", id);
-
-  if (error) {
-    throw error;
-  }
-
+  if (error) throw error;
   revalidatePath("/");
 }
 
@@ -90,26 +84,76 @@ export async function getOccupiedAround(
   baseISO: string
 ) {
   const supabase = createServiceClient();
-  const base = new Date(baseISO).getTime();
-  const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-  const start = new Date(base - TWO_HOURS_MS).toISOString();
-  const end = new Date(base + TWO_HOURS_MS).toISOString();
+
+  const base = new Date(baseISO);
+  if (Number.isNaN(base.getTime())) throw new Error("Invalid baseISO");
+
+  const DINE_MIN_MS = 90 * 60 * 1000;
+
+  const myStart = new Date(base.getTime() - DINE_MIN_MS);
+  const myEnd = new Date(base.getTime() + DINE_MIN_MS);
+
+  const fetchStart = new Date(base.getTime() - DINE_MIN_MS).toISOString();
+  const fetchEnd = new Date(base.getTime() + DINE_MIN_MS).toISOString();
 
   const { data, error } = await supabase
-    .from("reservations")
+    .from("reservation_tables")
     .select(
-      `id, queue_code, reservation_datetime, tbl:tables!reservations_table_id_fkey(table_name)`
+      `
+      table_id,
+      tables:table_id(table_name),
+      reservations:reservation_id!inner(
+        id,
+        queue_code,
+        reservation_datetime,
+        status,
+        cancelled_at
+      )
+    `
     )
-    .not("table_id", "is", null)
-    .neq("id", reservationId)
-    .eq("status", "seated")
-    .gte("reservation_datetime", start)
-    .lte("reservation_datetime", end);
+    .neq("reservation_id", reservationId)
+    .is("reservations.cancelled_at", null)
+    .in("reservations.status", [
+      "seated",
+      "confirmed",
+      "confirm",
+      "Seated",
+      "Confirmed",
+      "Confirm",
+    ])
+    .gte("reservations.reservation_datetime", fetchStart)
+    .lte("reservations.reservation_datetime", fetchEnd);
 
-  if (error) {
-    throw error;
+  if (error) throw error;
+
+  const uniq = new Map<number, any>();
+  for (const row of data ?? []) {
+    const name: string = row?.tables?.table_name ?? "";
+    const m = String(name).match(/\d+/);
+    const tableNo = Number(String(name).match(/\d+/)?.[0] ?? NaN);
+    if (!Number.isFinite(tableNo)) continue;
+
+    const otherISO = row?.reservations?.reservation_datetime;
+    const other = otherISO ? new Date(otherISO) : null;
+    if (!other || Number.isNaN(other.getTime())) continue;
+
+    const otherStart = new Date(other.getTime() - DINE_MIN_MS);
+    const otherEnd = new Date(other.getTime() + DINE_MIN_MS);
+
+    const overlap = myStart < otherEnd && otherStart < myEnd;
+    if (!overlap) continue;
+
+    if (!uniq.has(tableNo)) {
+      uniq.set(tableNo, {
+        tableNo,
+        reservationId: row?.reservations?.id ?? null,
+        queue_code: row?.reservations?.queue_code ?? null,
+        reservation_datetime: otherISO ?? null,
+      });
+    }
   }
-  return data ?? [];
+
+  return Array.from(uniq.values());
 }
 
 export async function listReservationsByUser(sb: unknown, userId: string) {
@@ -125,7 +169,7 @@ export async function listReservationsByUser(sb: unknown, userId: string) {
       status,
       comment,
       tbl:tables(table_name)
-      `
+    `
     )
     .eq("user_id", userId)
     .order("reservation_datetime", { ascending: false })
@@ -161,7 +205,6 @@ export async function checkUserReservationQuota(
   limitPerDay = 1
 ) {
   const supabase = createServiceClient();
-
   const { startISO, endISO } = bangkokDayRangeUTC(dayISO);
 
   const { count, error } = await supabase

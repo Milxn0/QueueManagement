@@ -2,171 +2,165 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
-
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
-
-type Body = {
-  reservationId?: string; 
-  partySize: number;
-  tableIds?: string[];
-  tableNos?: number[];
-};
-
-const getTableNo = (name?: string | null) => {
-  const m = String(name ?? "").match(/\d+/);
-  return m ? Number(m[0]) : null;
-};
-
+/**
+ * POST /api/admin/reservations/:id/assign-tables
+ * body: { tableNos: number[], partySize: number }
+ */
 export async function POST(
   req: Request,
-  ctx: { params: Promise<{ id: string }> } 
+  ctx: { params: Promise<{ id: string }> }
 ) {
-  const { id: reservationIdFromPath } = await ctx.params;
-
   try {
-    const body = (await req.json()) as Body;
-    const { partySize } = body;
+    const { id: reservationId } = await ctx.params;
+    if (!reservationId) return NextResponse.json({ error: "missing reservation id" }, { status: 400 });
 
-    if (!reservationIdFromPath || !Number.isFinite(partySize)) {
-      return NextResponse.json({ error: "invalid payload" }, { status: 400 });
-    }
+    const body = await req.json().catch(() => ({}));
+    const tableNos: number[] = Array.isArray(body?.tableNos)
+      ? body.tableNos.map((n: any) => Number(n)).filter((n: any) => Number.isFinite(n))
+      : [];
+    const partySize: number = Math.max(0, Number(body?.partySize) || 0);
+    if (!tableNos.length) return NextResponse.json({ error: "tableNos is required" }, { status: 400 });
 
-    const supabase = createServiceClient();
+    const sb = createServiceClient();
 
-    // 0) เวลาเป้าหมายของการจอง
-    const { data: me, error: meErr } = await supabase
+    // 1) ดึงข้อมูลการจอง
+    const { data: resv, error: resvErr } = await sb
       .from("reservations")
-      .select("id, reservation_datetime, status")
-      .eq("id", reservationIdFromPath)
+      .select("id, reservation_datetime, status, cancelled_at, queue_code")
+      .eq("id", reservationId)
       .maybeSingle();
 
-    if (meErr || !me) {
-      return NextResponse.json({ error: "reservation not found" }, { status: 404 });
+    if (resvErr || !resv) return NextResponse.json({ error: resvErr?.message || "reservation not found" }, { status: 404 });
+    if (resv.cancelled_at) return NextResponse.json({ error: "reservation already cancelled" }, { status: 409 });
+
+    const baseISO = String(resv.reservation_datetime ?? "");
+    const base = new Date(baseISO);
+    if (Number.isNaN(base.getTime())) return NextResponse.json({ error: "invalid reservation_datetime" }, { status: 400 });
+
+    // 2) แปลงหมายเลขโต๊ะ -> table ids และความจุ
+    const { data: allTables, error: tblErr } = await sb.from("tables").select("id, table_name, capacity");
+    if (tblErr) return NextResponse.json({ error: tblErr.message }, { status: 500 });
+
+    const parseNo = (name?: string | null) => {
+      const m = String(name ?? "").match(/\d+/);
+      return m ? Number(m[0]) : null;
+    };
+
+    const picked = (allTables ?? [])
+      .map((t: any) => ({ id: t.id as string, no: parseNo(t.table_name), cap: Number(t.capacity ?? 0) }))
+      .filter((t) => t.no != null && tableNos.includes(t.no as number));
+
+    if (picked.length !== tableNos.length) return NextResponse.json({ error: "some tables not found" }, { status: 400 });
+
+    // 3) ตรวจความจุรวม (cap + 2) ≥ partySize
+    const allowedSum = picked.reduce((s, t) => s + (t.cap + 2), 0);
+    if (partySize > allowedSum) {
+      return NextResponse.json({ error: `ที่นั่งรวมไม่พอ ต้องการ ${partySize} แต่ได้ ${allowedSum}` }, { status: 400 });
     }
 
-    const myWhen = me.reservation_datetime ? new Date(me.reservation_datetime) : null;
-    if (!myWhen || Number.isNaN(myWhen.getTime())) {
-      return NextResponse.json({ error: "reservation has invalid datetime" }, { status: 400 });
-    }
+    // 4) ตรวจชนเวลาตามเวลานั่งจริง (DINE_MINUTES) + ดูเฉพาะ mapping ที่ยัง active
+    const DINE_MIN_MS = Number(process.env.NEXT_PUBLIC_DINE_MINUTES || 90) * 60 * 1000;
+    const myStart = new Date(base.getTime() - DINE_MIN_MS);
+    const myEnd = new Date(base.getTime() + DINE_MIN_MS);
 
-    // 1) เตรียม table_id[]
-    let tableIds: string[] = Array.isArray(body.tableIds) ? body.tableIds.filter(Boolean) : [];
+    const pickedIds = picked.map((p) => p.id);
+    const fetchStart = myStart.toISOString();
+    const fetchEnd = myEnd.toISOString();
 
-    if (!tableIds.length && Array.isArray(body.tableNos) && body.tableNos.length) {
-      const { data: trows, error: terr } = await supabase
-        .from("tables")
-        .select("id, table_name");
-
-      if (terr) return NextResponse.json({ error: terr.message }, { status: 500 });
-
-      const pickedSet = new Set(body.tableNos);
-      const matched = (trows ?? []).filter((t: any) => {
-        const no = getTableNo(t?.table_name);
-        return no != null && pickedSet.has(no);
-        });
-      tableIds = matched.map((t: any) => t.id);
-    }
-
-    if (!tableIds.length) {
-      return NextResponse.json({ error: "no tables selected" }, { status: 400 });
-    }
-
-    // 2) ดึง capacity
-    const { data: tables, error: tErr } = await supabase
-      .from("tables")
-      .select("id, table_name, capacity")
-      .in("id", tableIds);
-
-    if (tErr) return NextResponse.json({ error: tErr.message }, { status: 500 });
-    if (!tables?.length) return NextResponse.json({ error: "tables not found" }, { status: 400 });
-
-    // 3) ตรวจ capacity รวม (cap+2)
-    const allowedSum = tables.reduce((s, t: any) => s + (Number(t?.capacity) || 0) + 2, 0);
-    if (allowedSum < partySize) {
-      return NextResponse.json(
-        { error: "insufficient capacity", detail: { partySize, allowedSum, need: partySize - allowedSum } },
-        { status: 400 }
-      );
-    }
-
-    // 4) กันชน ±2 ชม.
-    const minus = new Date(myWhen.getTime() - TWO_HOURS_MS).toISOString();
-    const plus  = new Date(myWhen.getTime() + TWO_HOURS_MS).toISOString();
-
-    const { data: conflicts, error: cErr } = await supabase
+    const { data: occ, error: occErr } = await sb
       .from("reservation_tables")
       .select(`
-        reservation_id,
         table_id,
-        tables!inner (table_name),
-        reservations!inner (id, status, reservation_datetime)
+        released_at,
+        reservations:reservation_id!inner(
+          id, queue_code, reservation_datetime, status, cancelled_at
+        )
       `)
-      .in("table_id", tableIds);
+      .in("table_id", pickedIds)
+      .neq("reservation_id", reservationId)
+      .is("released_at", null) // ⬅️ เฉพาะ mapping ที่ยัง active
+      .is("reservations.cancelled_at", null)
+      .in("reservations.status", [
+        "seated", "confirmed", "confirm",
+        "Seated", "Confirmed", "Confirm" // ⬅️ ไม่รวม paid
+      ])
+      .gte("reservations.reservation_datetime", fetchStart)
+      .lte("reservations.reservation_datetime", fetchEnd);
 
-    if (cErr) return NextResponse.json({ error: cErr.message }, { status: 500 });
+    if (occErr) return NextResponse.json({ error: occErr.message }, { status: 500 });
 
-    const conflictRows = (conflicts ?? []).filter((r: any) => {
-      const rid = r.reservations?.id;
-      if (!rid || rid === reservationIdFromPath) return false;
-      const st = String(r.reservations?.status ?? "").toLowerCase();
-      if (st.includes("cancel")) return false;
-      const dt = r.reservations?.reservation_datetime ? new Date(r.reservations.reservation_datetime) : null;
-      if (!dt || Number.isNaN(dt.getTime())) return false;
-      const iso = dt.toISOString();
-      return iso >= minus && iso <= plus;
-    });
+    const id2no = new Map<string, number>();
+    picked.forEach((p) => id2no.set(p.id, p.no as number));
 
-    if (conflictRows.length) {
-      const detail = conflictRows.map((r: any) => ({
-        table_no: getTableNo(r.tables?.table_name) ?? "?",
-        other_reservation_id: r.reservations?.id,
-        other_status: r.reservations?.status,
-        other_time: r.reservations?.reservation_datetime,
-      }));
-      return NextResponse.json({ error: "time conflict", detail }, { status: 409 });
+    const conflicts = new Set<number>();
+    for (const row of occ ?? []) {
+      const otherISO: string | null = row?.reservations?.reservation_datetime ?? null;
+      if (!otherISO) continue;
+      const other = new Date(otherISO);
+      if (Number.isNaN(other.getTime())) continue;
+
+      const otherStart = new Date(other.getTime() - DINE_MIN_MS);
+      const otherEnd = new Date(other.getTime() + DINE_MIN_MS);
+      const overlap = myStart < otherEnd && otherStart < myEnd;
+      if (overlap) {
+        const no = id2no.get(row.table_id);
+        if (no != null) conflicts.add(no);
+      }
     }
 
-    // 5) clear เดิม + insert ใหม่
-    const { error: delErr } = await supabase
+    if (conflicts.size > 0) {
+      return NextResponse.json({ error: `โต๊ะ ${[...conflicts].join(", ")} ถูกใช้งานช่วงเวลาใกล้เคียงโดยคิวอื่น` }, { status: 409 });
+    }
+
+    // 5) ซิงค์ reservation_tables
+    //   - ลบเฉพาะ mapping ที่ "ยัง active" และไม่อยู่ในชุดใหม่
+    //   - แทรก mapping ใหม่ด้วย released_at = null
+    const { data: currentMaps, error: mapErr } = await sb
       .from("reservation_tables")
-      .delete()
-      .eq("reservation_id", reservationIdFromPath);
-    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+      .select("table_id, released_at")
+      .eq("reservation_id", reservationId);
 
-    const rowsToInsert = tables.map((t: any) => ({
-      reservation_id: reservationIdFromPath,
-      table_id: t.id,
-      seats_assigned: 0,
-    }));
-    const { error: insErr } = await supabase.from("reservation_tables").insert(rowsToInsert);
-    if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    if (mapErr) return NextResponse.json({ error: mapErr.message }, { status: 500 });
 
-    // 6) อัปเดตตาราง reservations ให้เป็น "seated" และ (ถ้ามีคอลัมน์ table_id) ตั้ง table แรกเป็น primary
-    const primaryTableId = tables[0]?.id ?? null;
-    const updatePayload: Record<string, any> = { status: "seated" };
-    if (primaryTableId) updatePayload.table_id = primaryTableId;
+    const currentActiveIds = new Set(
+      (currentMaps ?? []).filter((m: any) => m.released_at == null).map((m: any) => m.table_id as string)
+    );
+    const wantIds = new Set(pickedIds);
 
-    const { error: upErr } = await supabase
-      .from("reservations")
-      .update(updatePayload)
-      .eq("id", reservationIdFromPath);
-    if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
+    const toDelete = Array.from(currentActiveIds).filter((id) => !wantIds.has(id));
+    const toInsert = Array.from(wantIds).filter((id) => !currentActiveIds.has(id));
+
+    if (toDelete.length > 0) {
+      const { error: delErr } = await sb
+        .from("reservation_tables")
+        .delete()
+        .eq("reservation_id", reservationId)
+        .is("released_at", null)
+        .in("table_id", toDelete);
+      if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
+    }
+
+    if (toInsert.length > 0) {
+      const rows = toInsert.map((table_id) => ({ reservation_id: reservationId, table_id, released_at: null }));
+      const { error: insErr } = await sb.from("reservation_tables").insert(rows);
+      if (insErr) return NextResponse.json({ error: insErr.message }, { status: 500 });
+    }
+
+    // 6) อัปเดตสถานะเป็น "seated"
+    const { error: updErr } = await sb.from("reservations").update({ status: "seated" }).eq("id", reservationId);
+    if (updErr) return NextResponse.json({ error: updErr.message }, { status: 500 });
 
     return NextResponse.json(
       {
         ok: true,
-        assigned: tables.map((t: any) => ({
-          table_id: t.id,
-          table_no: getTableNo(t.table_name),
-        })),
-        capacity: { partySize, allowedSum },
+        reservationId,
+        tables: picked.map((p) => ({ id: p.id, no: p.no, cap: p.cap })),
+        allowedSum,
+        partySize,
       },
       { status: 200 }
     );
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "unknown error" }, { status: 500 });
+    return NextResponse.json({ error: e?.message || "unknown error" }, { status: 500 });
   }
 }

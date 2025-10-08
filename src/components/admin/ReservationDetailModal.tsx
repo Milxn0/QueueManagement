@@ -22,7 +22,6 @@ import {
 } from "@/utils/status";
 
 const TH_TZ = "Asia/Bangkok";
-const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 /* ---------- Helpers ---------- */
 const parseDate = (value: string | null) => {
@@ -55,17 +54,6 @@ const formatDate = (value: string | null) => {
     ? d.toLocaleString("th-TH", {
         dateStyle: "medium",
         timeStyle: "short",
-        timeZone: TH_TZ,
-      })
-    : "-";
-};
-
-const formatTime = (value: string) => {
-  const d = parseDate(value);
-  return d
-    ? d.toLocaleTimeString("th-TH", {
-        hour: "2-digit",
-        minute: "2-digit",
         timeZone: TH_TZ,
       })
     : "-";
@@ -124,9 +112,9 @@ export default function ReservationDetailModal({
       .from("reservations")
       .select(
         `
-      id, reservation_datetime, status, partysize, comment, cancelled_at,
-      cancelled_reason, cancelled_by_user_id
-    `
+        id, reservation_datetime, status, partysize, comment, cancelled_at,
+        cancelled_reason, cancelled_by_user_id
+      `
       )
       .eq("id", row.id)
       .single();
@@ -139,6 +127,39 @@ export default function ReservationDetailModal({
     setDisplayDatetime(data?.reservation_datetime ?? null);
     setDisplayPartysize(data?.partysize ?? null);
     setDisplayComment(data?.comment ?? null);
+    await loadAssignedTables(); // ⬅️ รีเฟรชรายชื่อโต๊ะที่นั่งอยู่
+  }
+
+  // ⬇️ โหลดรายการโต๊ะที่ mapping กับ reservation นี้ทั้งหมด
+  const [assignedTables, setAssignedTables] = useState<
+    { id: string; name: string; no: number | null }[]
+  >([]);
+  const getNo = (name?: string | null) => {
+    const m = String(name ?? "").match(/\d+/);
+    return m ? Number(m[0]) : null;
+  };
+  async function loadAssignedTables() {
+    if (!row?.id) return;
+    const { data, error } = await supabase
+      .from("reservation_tables")
+      .select("table_id, tables:table_id(id, table_name)")
+      .eq("reservation_id", row.id);
+
+    if (!error) {
+      const items = (data ?? [])
+        .map((r: any) => r.tables)
+        .filter(Boolean)
+        .map((t: any) => ({
+          id: t.id as string,
+          name: String(t.table_name ?? ""),
+          no: getNo(t.table_name),
+        }));
+      // เรียงตามหมายเลขโต๊ะ
+      items.sort((a: { no: any }, b: { no: any }) => (a.no ?? 0) - (b.no ?? 0));
+      setAssignedTables(items);
+    } else {
+      setAssignedTables([]);
+    }
   }
 
   async function loadPaymentInfo(reservationId: string) {
@@ -211,14 +232,12 @@ export default function ReservationDetailModal({
     () => (displayStatus || "").toLowerCase(),
     [displayStatus]
   );
-  // NEW: แสดง payment เฉพาะ paid
   const isPaid = normStatus === "paid";
 
   // steps
   const [cancelStep, setCancelStep] = useState<0 | 1>(0);
   const [tableStep, setTableStep] = useState<0 | 1>(0);
   const [picked, setPicked] = useState<number[]>([]);
-
   const [editStep, setEditStep] = useState<0 | 1>(0);
 
   // edit form
@@ -233,6 +252,7 @@ export default function ReservationDetailModal({
   // Payment Drawer
   const [showPayment, setShowPayment] = useState(false);
 
+  // (ยังคงสำหรับโค้ดเดิมที่ใช้เลขโต๊ะเดียวในบางที่)
   const [optimisticTableNo, setOptimisticTableNo] = useState<number | null>(
     currentTableNo ?? null
   );
@@ -267,13 +287,13 @@ export default function ReservationDetailModal({
         const caps = new Map<number, number>();
         const nos: number[] = [];
 
-        const getNo = (name?: string | null) => {
+        const getNoLocal = (name?: string | null) => {
           const m = String(name ?? "").match(/\d+/);
           return m ? Number(m[0]) : null;
         };
 
         (data ?? []).forEach((t: any) => {
-          const no = getNo(t?.table_name);
+          const no = getNoLocal(t?.table_name);
           const cap = Number(t?.capacity ?? 0);
           if (no != null) {
             nos.push(no);
@@ -298,13 +318,6 @@ export default function ReservationDetailModal({
   }>(null);
   const showError = (text: string) => setNotice({ type: "error", text });
   const clearNotice = () => setNotice(null);
-
-  const baht = (n: number | string | null | undefined) =>
-    new Intl.NumberFormat("th-TH", {
-      style: "currency",
-      currency: "THB",
-      maximumFractionDigits: 0,
-    }).format(Number(n || 0));
 
   const [ok, setOk] = useState<string | null>(null);
   const [displayDatetime, setDisplayDatetime] = useState<string | null>(
@@ -331,14 +344,56 @@ export default function ReservationDetailModal({
     pkgSubtotal: number;
     alaSubtotal: number;
   } | null>(null);
+  const [around, setAround] = useState<OccupiedItem[]>([]);
   const [tableNos, setTableNos] = useState<number[]>([]);
   const occByTable = useMemo(() => {
     const m = new Map<number, OccupiedItem>();
-    (occupied ?? []).forEach((o) => m.set(o.tableNo, o));
+    (around ?? []).forEach((o) => m.set(o.tableNo, o));
     return m;
-  }, [occupied]);
-
+  }, [around]);
+  const myTableNos = useMemo(() => {
+    if (!row?.id && !row?.queue_code) return [];
+    return (occupied ?? [])
+      .filter(
+        (o) =>
+          (o as any)?.reservationId === row?.id ||
+          (o as any)?.queue_code === row?.queue_code
+      )
+      .map((o) => o.tableNo);
+  }, [occupied, row?.id, row?.queue_code]);
+  const myAssignedNos = useMemo(
+    () =>
+      (assignedTables ?? [])
+        .map((t) => t.no)
+        .filter((n): n is number => n != null),
+    [assignedTables]
+  );
   const [isAdmin, setIsAdmin] = useState(false);
+
+  // โหลดรายการโต๊ะที่ชนเวลา (รอบ ๆ วัน/เวลาเดียวกัน) เพื่อ disable ปุ่ม
+  useEffect(() => {
+    if (!open || tableStep !== 1 || !row?.id) return;
+
+    const dtISO =
+      parseDate(displayDatetime ?? null)?.toISOString() ??
+      new Date().toISOString();
+
+    const url = `/api/admin/reservations/${
+      row.id
+    }/occupied?dt=${encodeURIComponent(dtISO)}`;
+
+    (async () => {
+      try {
+        const res = await fetch(url, { cache: "no-store" });
+        if (!res.ok) throw new Error("fetch occupied fail");
+        const list = await res.json();
+        setAround(Array.isArray(list) ? list : []);
+      } catch {
+        setAround([]);
+      }
+    })();
+  }, [open, tableStep, row?.id, displayDatetime]);
+
   useEffect(() => {
     (async () => {
       try {
@@ -356,6 +411,10 @@ export default function ReservationDetailModal({
       }
     })();
   }, []);
+
+  useEffect(() => {
+    if (tableStep === 1) setNotice(null);
+  }, [tableStep]);
 
   useEffect(() => {
     setLocalStatus((row?.status ?? "").toLowerCase());
@@ -377,6 +436,7 @@ export default function ReservationDetailModal({
     setOk(null);
     setShowPayment(false);
     setOptimisticTableNo(currentTableNo ?? null);
+    loadAssignedTables(); // ⬅️ โหลดโต๊ะที่นั่งอยู่เมื่อเปิด/เปลี่ยนเรคคอร์ด
   }, [row?.id, open, currentTableNo]);
 
   // ดึงบิลเฉพาะตอน paid
@@ -386,7 +446,7 @@ export default function ReservationDetailModal({
     }
   }, [open, row?.id, isPaid]);
 
-  // ถ้าไม่ใช่ paid ให้ปิด toggle รายละเอียด
+  // ปิด toggle รายละเอียดเมื่อไม่ใช่ paid
   useEffect(() => {
     if (!isPaid) setShowPkg(false);
   }, [isPaid]);
@@ -399,6 +459,7 @@ export default function ReservationDetailModal({
     setEditStep(0);
     setReason("");
     setOk(null);
+    setAround([]);
     onClose();
   };
 
@@ -416,27 +477,6 @@ export default function ReservationDetailModal({
 
   const shownTableNo = optimisticTableNo ?? currentTableNo;
 
-  const conflictMessage = (targetTable: number): string | null => {
-    if (normStatus !== "seated") return null;
-
-    const occ = occByTable.get(targetTable);
-    if (!occ || !displayDatetime) return null;
-
-    const a = parseDate(displayDatetime);
-    const b = parseDate(occ.reservation_datetime);
-    if (!a || !b) return null;
-
-    const diff = Math.abs(a.getTime() - b.getTime());
-    if (diff < TWO_HOURS_MS) {
-      return `โต๊ะ ${targetTable} ถูกใช้ใกล้เวลา (คิว ${showOccCode(
-        occ
-      )} เวลา ${formatTime(
-        occ.reservation_datetime
-      )}) — ต้องห่างอย่างน้อย 2 ชั่วโมง`;
-    }
-    return null;
-  };
-
   const doPickTable = async (no: number) => {
     if (busy) return;
 
@@ -453,9 +493,10 @@ export default function ReservationDetailModal({
       return;
     }
 
-    const msg = conflictMessage(no);
-    if (msg) {
-      showError(msg);
+    // ไม่เช็ค time-conflict ใน client อีกต่อไป — ใช้ผล occupied จาก API เท่านั้น
+    const occ = occByTable.get(no);
+    if (occ && !myAssignedNos.includes(no)) {
+      // คนอื่นจับอยู่ — กันไว้เฉย ๆ (ปกติปุ่มจะ disabled อยู่แล้ว)
       return;
     }
 
@@ -474,6 +515,7 @@ export default function ReservationDetailModal({
         await onAssignTable(row.id, no);
       }
 
+      await loadAssignedTables();
       onUpdated?.();
     } catch (e: any) {
       setOptimisticTableNo(prevTable);
@@ -483,9 +525,6 @@ export default function ReservationDetailModal({
       setBusy(false);
     }
   };
-
-  const capitalize = (s?: string | null) =>
-    s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : "—";
 
   const saveEdit = async () => {
     if (busy) return;
@@ -517,11 +556,11 @@ export default function ReservationDetailModal({
         setDisplayDatetime(payload.reservation_datetime as string);
       if ("partysize" in payload)
         setDisplayPartysize(payload.partysize as number | null);
-      if ("comment" in payload) {
+      if ("comment" in payload)
         setDisplayComment((payload.comment as string | null) ?? null);
-      }
       setEditStep(0);
       setOk("แก้ไขสำเร็จ");
+      await loadAssignedTables(); // เผื่อแก้เวลาแล้วมีผลกับแสดงผล
       onUpdated?.();
 
       setTimeout(() => setOk(null), 1600);
@@ -534,11 +573,9 @@ export default function ReservationDetailModal({
     (s, it) => s + (it.qty ?? 0),
     0
   );
-
   const hasAnyBillItems =
     !!payment &&
     ((payment.packageQty ?? 0) > 0 || (payment.alaItems?.length ?? 0) > 0);
-
   const AUTO_CANCEL_UUID = "00000000-0000-0000-0000-000000000001";
 
   const handleDeleteReservation = async () => {
@@ -546,12 +583,15 @@ export default function ReservationDetailModal({
     try {
       setDelBusy(true);
       setDelErr(null);
-
+      const { error: delMapsErr } = await supabase
+        .from("reservation_tables")
+        .delete()
+        .eq("reservation_id", row.id);
+      if (delMapsErr) throw delMapsErr;
       const { data: bills } = await supabase
         .from("bills")
         .select("id")
         .eq("reservation_id", row.id);
-
       const billIds = (bills ?? []).map((b: any) => b.id);
       if (billIds.length > 0) {
         const { error: delItemsErr } = await supabase
@@ -574,7 +614,6 @@ export default function ReservationDetailModal({
       if (error) throw error;
 
       onUpdated?.();
-
       setConfirmDelOpen(false);
       handleClose();
     } catch (e: any) {
@@ -668,7 +707,7 @@ export default function ReservationDetailModal({
               </div>
             )}
 
-            {/* INFO GRID (read-only) */}
+            {/* INFO GRID */}
             <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <p className="text-xs text-gray-500">วันเวลา</p>
@@ -676,6 +715,7 @@ export default function ReservationDetailModal({
                   {formatDate(displayDatetime)}
                 </p>
               </div>
+
               <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <p className="text-xs text-gray-500">จำนวนที่นั่ง</p>
                 <p className="mt-0.5 font-medium">
@@ -685,15 +725,10 @@ export default function ReservationDetailModal({
                   คน
                 </p>
               </div>
-              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 md:col-span-2">
-                <p className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</p>
-                <p className="mt-0.5">
-                  {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
-                </p>
-              </div>
-              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3 md:col-span-2">
+
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
                 <p className="text-xs text-gray-500">สถานะ</p>
-                <div className="mt-1 inline-flex items-center gap-2">
+                <div className="mt-1 flex flex-wrap items-center gap-2">
                   <span
                     className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium capitalize ${statusClass(
                       normStatus
@@ -701,16 +736,39 @@ export default function ReservationDetailModal({
                   >
                     {displayStatus || "—"}
                   </span>
-                  {shownTableNo ? (
+                </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs text-gray-500">โต๊ะที่ใช้บริการ</p>
+                <div className="mt-1 flex flex-wrap items-center gap-1 max-h-[72px] overflow-auto pr-1">
+                  {assignedTables?.length > 0 ? (
+                    assignedTables.map((t: any) => (
+                      <span
+                        key={t.id ?? t.table_id}
+                        className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                        title={t.name ?? t.table_name ?? undefined}
+                      >
+                        โต๊ะ: {t.no ?? t.tables?.no ?? t.name ?? t.table_name}
+                      </span>
+                    ))
+                  ) : shownTableNo ? (
                     <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">
                       โต๊ะ: {shownTableNo}
                     </span>
-                  ) : null}
+                  ) : (
+                    <span className="text-slate-400 text-xs">ยังไม่มีโต๊ะ</span>
+                  )}
                 </div>
+              </div>
+              <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
+                <p className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</p>
+                <p className="mt-0.5">
+                  {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
+                </p>
               </div>
             </section>
 
-            {/* SUMMARY CARDS — show only when paid */}
+            {/* PAID SUMMARY CARDS */}
             {isPaid && payment && (
               <section className="mt-4 mb-5 grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
@@ -759,7 +817,7 @@ export default function ReservationDetailModal({
                   </p>
                 </div>
                 <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-                  <p className="text-xs text-emerald-700">เช็คเอาต์</p>
+                  <p className="text-xs text-emerald-700">เวลาชำระเงิน</p>
                   <p className="mt-0.5 font-semibold text-emerald-900">
                     {formatDisplayDate(payment?.paidAt ?? null)}
                   </p>
@@ -767,7 +825,7 @@ export default function ReservationDetailModal({
               </section>
             )}
 
-            {/* TABLE DETAIL (toggle) — add top margin for spacing */}
+            {/* TABLE DETAIL (toggle) */}
             {isPaid && payment && showPkg && (
               <div className="mt-5 md:mt-6 overflow-x-auto">
                 <table className="w-full table-fixed border-separate border-spacing-0 overflow-hidden rounded-xl text-sm">
@@ -1000,7 +1058,7 @@ export default function ReservationDetailModal({
               </div>
             )}
 
-            {/* PICK TABLE step */}
+            {/* PICK TABLE step (หลายโต๊ะ) */}
             {!readOnly && tableStep === 1 && (
               <div className="mt-5 rounded-2xl border border-indigo-200 bg-indigo-50/40 p-4">
                 <div className="mb-2 flex items-center justify-between">
@@ -1008,58 +1066,74 @@ export default function ReservationDetailModal({
                     เลือกโต๊ะ
                   </div>
                   <div className="text-[11px] text-indigo-600">
-                    เงื่อนไข: รวมความจุ (cap+2) ≥ จำนวนที่นั่ง •
-                    หลีกเลี่ยงชนเวลา 2 ชม.
+                    เงื่อนไข: รวมความจุ (cap+2) ≥ จำนวนที่นั่ง
                   </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                   {tableNos.map((no) => {
                     const occ = occByTable.get(no);
-                    const conflict = conflictMessage(no) !== null;
-                    const pickedNow = picked.includes(no);
                     const cap = tableCaps.get(no) ?? null;
                     const allowed = cap != null ? cap + 2 : null;
 
-                    const togglePick = (no: number) => {
-                      setPicked((arr) =>
-                        arr.includes(no)
-                          ? arr.filter((x) => x !== no)
-                          : [...arr, no]
-                      );
-                    };
+                    const isMine =
+                      !!occ &&
+                      ((occ as any)?.reservationId === row.id ||
+                        (occ as any)?.queue_code === row.queue_code);
+
+                    const isOthers = !!occ && !isMine;
+                    const isPicked = picked.includes(no);
+                    const baseClass =
+                      "rounded-xl border px-3 py-2 text-left transition focus:outline-none focus:ring-2";
+                    const stateClass = isOthers
+                      ? "border-rose-300 bg-rose-50 text-rose-700 opacity-60 cursor-not-allowed"
+                      : isPicked
+                      ? // สีน้ำเงินเมื่อเลือก
+                        "border-indigo-500 bg-indigo-50 text-indigo-700 ring-indigo-200"
+                      : myAssignedNos.includes(no)
+                      ? // โต๊ะปัจจุบัน
+                        "border-emerald-300 bg-emerald-50 text-emerald-800"
+                      : // ปกติ/ว่าง
+                        "border-slate-200 bg-white hover:bg-slate-50";
+
                     return (
                       <button
                         key={no}
-                        onClick={() => togglePick(no)}
-                        disabled={busy || conflict || !!occ}
-                        className={[
-                          "rounded-xl border px-3 py-2 text-left transition",
-                          pickedNow
-                            ? "border-indigo-300 bg-indigo-50 text-indigo-800"
-                            : occ
-                            ? "border-rose-300 bg-rose-50 text-rose-700"
-                            : "border-slate-200 bg-white hover:bg-slate-50",
-                          conflict || !!occ
-                            ? "opacity-60 cursor-not-allowed"
-                            : "",
-                        ].join(" ")}
+                        onClick={() =>
+                          setPicked((arr) =>
+                            arr.includes(no)
+                              ? arr.filter((x) => x !== no)
+                              : [...arr, no]
+                          )
+                        }
+                        disabled={busy || isOthers}
+                        className={[baseClass, stateClass].join(" ")}
                         title={
-                          conflict
-                            ? conflictMessage(no) ?? ""
-                            : occ
-                            ? `มีคิว ${showOccCode(occ)} เวลา ${formatTime(
-                                occ.reservation_datetime
-                              )}`
+                          myAssignedNos.includes(no)
+                            ? `โต๊ะปัจจุบัน ${row.queue_code ?? ""}`
+                            : isOthers
+                            ? `โต๊ะของ ${showOccCode(occ)}`
+                            : isPicked
+                            ? "กำลังเลือก"
                             : "ว่าง"
                         }
+                        aria-pressed={isPicked} // ช่วยเรื่อง a11y
                       >
-                        <div className="text-sm font-semibold">โต๊ะ {no}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm font-semibold">โต๊ะ {no}</div>
+                          {isPicked && (
+                            <span className="text-[10px] font-medium text-indigo-700">
+                              เลือกแล้ว
+                            </span>
+                          )}
+                        </div>
                         <div className="text-[11px]">
-                          {pickedNow
-                            ? "เลือกแล้ว"
-                            : occ
-                            ? ` ${showOccCode(occ)}`
+                          {myAssignedNos.includes(no)
+                            ? `โต๊ะปัจจุบัน ${row.queue_code ?? ""}`
+                            : isOthers
+                            ? `โต๊ะของ ${showOccCode(occ)}`
+                            : isPicked
+                            ? "กำลังเลือก"
                             : "ว่าง"}
                         </div>
                         {cap != null && (
@@ -1074,15 +1148,18 @@ export default function ReservationDetailModal({
 
                 {/* Summary */}
                 <div className="mt-3 rounded-xl bg-white px-3 py-2 text-sm ring-1 ring-indigo-100">
-                  รวมความจุที่อนุโลม: <b>{allowedSum}</b> คน • ต้องการ{" "}
+                  ความจุของโต๊ะที่รับได้: <b>{allowedSum}</b> คน • จำนวนคนที่จอง{" "}
                   <b>{requiredSeats}</b> คน
                   {need > 0 ? (
                     <span className="text-rose-600">
                       {" "}
-                      • ยังขาดอีก {need} คน
+                      • จำนวนที่นั่งยังขาดอีก {need} ที่นั่ง
                     </span>
                   ) : (
-                    <span className="text-emerald-600"> • เพียงพอ</span>
+                    <span className="text-emerald-600">
+                      {" "}
+                      • เพียงพอต่อจำนวนคน
+                    </span>
                   )}
                 </div>
 
@@ -1120,6 +1197,7 @@ export default function ReservationDetailModal({
                         setLocalStatus("seated");
                         setOptimisticTableNo(null);
                         setTableStep(0);
+                        await loadAssignedTables();
                         onUpdated?.();
                       } catch (e: any) {
                         showError(e?.message || "จัดโต๊ะไม่สำเร็จ");
@@ -1249,7 +1327,12 @@ export default function ReservationDetailModal({
                       <FontAwesomeIcon icon={faCircleCheck} />
                     </span>
                   )}
-
+                  {normStatus.includes("paid") && (
+                    <span className="inline-flex items-center gap-1 rounded-xl bg-emerald-50 px-3 py-1.5 text-sm font-semibold text-emerald-700 ring-1 ring-emerald-200">
+                      ชำระเงินแล้ว
+                      <FontAwesomeIcon icon={faCircleCheck} />
+                    </span>
+                  )}
                   <button
                     type="button"
                     onClick={handleClose}

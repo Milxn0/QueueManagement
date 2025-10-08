@@ -15,53 +15,27 @@ export async function POST(req: Request) {
       input: string | null | undefined
     ): "cash" | "card" | "qr" | "transfer" | "e-wallet" | null => {
       if (!input) return null;
-      const v = String(input)
-        .trim()
-        .toLowerCase()
-        .replace(/\s/g, "")
-        .replace(/_/g, "-");
-      if (["cash", "card", "qr", "transfer", "e-wallet"].includes(v)) {
-        return v as any;
-      }
+      const v = String(input).trim().toLowerCase().replace(/\s/g, "").replace(/_/g, "-");
+      if (["cash", "card", "qr", "transfer", "e-wallet"].includes(v)) return v as any;
       if (["ewallet", "wallet"].includes(v)) return "e-wallet";
       if (["promptpay", "qrpay", "qrcode"].includes(v)) return "qr";
-      if (["credit", "debit", "creditcard", "debitcard"].includes(v))
-        return "card";
+      if (["credit", "debit", "creditcard", "debitcard"].includes(v)) return "card";
       return null;
     };
 
     const paymentMethod = normalizePaymentMethod(rawMethod);
-
     const selectedPackage: number | null = body?.selectedPackage ?? null;
-
-    // ผู้ใหญ่
     const people: number = Math.max(0, Number(body?.people ?? 0) || 0);
-
     const children: number = Math.max(0, Number(body?.children ?? 0) || 0);
     const childUnitReq: number = Math.max(0, Number(body?.childUnit ?? 0) || 0);
 
-    const alaItems: AlaItem[] = Array.isArray(body?.alaItems)
-      ? body.alaItems
-      : [];
+    const alaItems: AlaItem[] = Array.isArray(body?.alaItems) ? body.alaItems : [];
 
-    if (!reservationId) {
-      return NextResponse.json(
-        { error: "reservationId is required" },
-        { status: 400 }
-      );
-    }
-
-    if (!paymentMethod) {
-      return NextResponse.json(
-        { error: "invalid paymentMethod" },
-        { status: 400 }
-      );
-    }
+    if (!reservationId) return NextResponse.json({ error: "reservationId is required" }, { status: 400 });
+    if (!paymentMethod) return NextResponse.json({ error: "invalid paymentMethod" }, { status: 400 });
 
     // ------- คำนวณยอด -------
     const pkgUnit = Math.max(0, Number(selectedPackage ?? 0) || 0);
-
-    // ถ้า client ไม่ส่ง childUnit มา ให้คำนวณจาก package/2 (ปัดบาท)
     const childUnit = childUnitReq > 0 ? childUnitReq : Math.round(pkgUnit / 2);
 
     const pkgAdultSubtotal = pkgUnit * people;
@@ -82,33 +56,20 @@ export async function POST(req: Request) {
     const { data: bill, error: billErr } = await supabase
       .from("bills")
       .upsert(
-        {
-          reservation_id: reservationId,
-          total,
-          payment_method: paymentMethod,
-          status: "paid",
-        },
+        { reservation_id: reservationId, total, payment_method: paymentMethod, status: "paid" },
         { onConflict: "reservation_id" }
       )
       .select("*")
       .single();
 
-    if (billErr) {
-      return NextResponse.json({ error: billErr.message }, { status: 500 });
-    }
+    if (billErr) return NextResponse.json({ error: billErr.message }, { status: 500 });
 
     // ล้างรายการเก่าก่อน
-    const { error: delErr } = await supabase
-      .from("bill_items")
-      .delete()
-      .eq("bill_id", bill.id);
-    if (delErr) {
-      return NextResponse.json({ error: delErr.message }, { status: 500 });
-    }
+    const { error: delErr } = await supabase.from("bill_items").delete().eq("bill_id", bill.id);
+    if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
     const items: any[] = [];
 
-    // แพ็กเกจผู้ใหญ่
     if (pkgUnit > 0 && people > 0) {
       items.push({
         bill_id: bill.id,
@@ -133,16 +94,13 @@ export async function POST(req: Request) {
       });
     }
 
-    // เมนู a la carte
     for (const it of alaItems) {
       items.push({
         bill_id: bill.id,
         kind: "item",
         ref_id:
           typeof it?.id === "string" &&
-          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
-            it.id
-          )
+          /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(it.id)
             ? it.id
             : null,
         name_snapshot: String(it?.name ?? "Item"),
@@ -153,46 +111,35 @@ export async function POST(req: Request) {
     }
 
     if (items.length > 0) {
-      const { error: insertErr } = await supabase
-        .from("bill_items")
-        .insert(items);
-      if (insertErr) {
-        return NextResponse.json({ error: insertErr.message }, { status: 500 });
-      }
+      const { error: insertErr } = await supabase.from("bill_items").insert(items);
+      if (insertErr) return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
 
-    // อัปเดตสถานะการจอง
-    const { error: resErr } = await supabase
-      .from("reservations")
-      .update({ status: "paid" })
-      .eq("id", reservationId);
-    if (resErr) {
-      return NextResponse.json({ error: resErr.message }, { status: 500 });
+    // อัปเดตสถานะการจอง -> paid
+    const { error: resErr } = await supabase.from("reservations").update({ status: "paid" }).eq("id", reservationId);
+    if (resErr) return NextResponse.json({ error: resErr.message }, { status: 500 });
+
+    // สำคัญ: "ปล่อยโต๊ะ" โดยตั้ง released_at (เก็บประวัติ ไม่ลบ)
+    const { error: releaseErr } = await supabase
+      .from("reservation_tables")
+      .update({ released_at: new Date().toISOString() })
+      .eq("reservation_id", reservationId)
+      .is("released_at", null);
+
+    if (releaseErr) {
+      // ไม่ทำให้ fail การชำระ แต่บันทึก log
+      console.error("[pay] release reservation_tables failed:", releaseErr.message);
     }
 
     return NextResponse.json(
       {
-        bill: {
-          id: bill.id,
-          total,
-          payment_method: bill.payment_method,
-          status: bill.status,
-        },
-        totals: {
-          pkgAdultSubtotal,
-          pkgChildSubtotal,
-          pkgSubtotal,
-          alaSubtotal,
-          total,
-        },
+        bill: { id: bill.id, total, payment_method: bill.payment_method, status: bill.status },
+        totals: { pkgAdultSubtotal, pkgChildSubtotal, pkgSubtotal, alaSubtotal, total },
         children: { count: children, unit: childUnit },
       },
       { status: 200 }
     );
   } catch (e: any) {
-    return NextResponse.json(
-      { error: e?.message ?? "unknown error" },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: e?.message ?? "unknown error" }, { status: 500 });
   }
 }

@@ -13,6 +13,7 @@ import {
   faMoneyBillWave,
   faChild,
 } from "@fortawesome/free-solid-svg-icons";
+import { createClient } from "@/lib/supabaseClient";
 
 export type AlaItem = { id: string; name: string; qty: number; price: number };
 
@@ -57,6 +58,8 @@ export default function PaymentStep({
   initialSelectedPackage = null,
   initialAlaItems,
 }: Props) {
+  const supabase = createClient();
+
   const [paymentMethod, setPaymentMethod] = useState<
     "cash" | "card" | "qr" | "transfer" | "e-wallet" | null
   >(null);
@@ -66,10 +69,11 @@ export default function PaymentStep({
     initialSelectedPackage
   );
 
-  // ผู้ใหญ่
+  // ผู้ใหญ่ (อ่านจาก DB สด + realtime)
   const [people, setPeople] = useState<number>(
     Number.isFinite(peopleInitial) && peopleInitial > 0 ? peopleInitial : 1
   );
+  const [loadingPeople, setLoadingPeople] = useState<boolean>(false);
 
   const [children, setChildren] = useState<number>(0);
   const totalSeats = useMemo(
@@ -83,10 +87,54 @@ export default function PaymentStep({
   const nameInputRef = useRef<HTMLInputElement>(null);
   const [savingPeople, setSavingPeople] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const SPLIT_KEY = (rid: string) => `pay-split:${rid}`;
+  const SPLIT_KEY = (id: string) => `pay-split:${id}`;
 
   const lastReservationIdRef = useRef<string | null>(null);
 
+  // ⬇️ โหลด partysize จาก DB เมื่อเปิด และ subscribe อัปเดตแบบเรียลไทม์
+  useEffect(() => {
+    if (!reservationId || !open) return;
+    let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+
+    (async () => {
+      try {
+        setLoadingPeople(true);
+        const { data, error } = await supabase
+          .from("reservations")
+          .select("partysize")
+          .eq("id", reservationId)
+          .single();
+
+        if (!mounted) return;
+        if (!error && data && typeof data.partysize === "number" && data.partysize > 0) {
+          setPeople(data.partysize);
+        }
+      } finally {
+        if (mounted) setLoadingPeople(false);
+      }
+    })();
+
+    channel = supabase
+      .channel(`reservation:${reservationId}`)
+      .on(
+        "postgres_changes",
+        { event: "UPDATE", schema: "public", table: "reservations", filter: `id=eq.${reservationId}` },
+        (payload: { new: any; }) => {
+          const next = (payload.new as any)?.partysize;
+          if (typeof next === "number" && next > 0) setPeople(next);
+        }
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      if (channel) supabase.removeChannel(channel);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reservationId, open]);
+
+  // โหลด/รีเซ็ต state อื่น ๆ เมื่อเปลี่ยน reservation
   useEffect(() => {
     const changedReservation = lastReservationIdRef.current !== reservationId;
     if (!changedReservation) return;
@@ -97,7 +145,7 @@ export default function PaymentStep({
         const saved = JSON.parse(raw) as { people?: number; children?: number };
         const p = Math.max(1, Number(saved?.people) || 1);
         const c = Math.max(0, Number(saved?.children) || 0);
-        setPeople(p);
+        setPeople(p); // จะถูก override โดย DB ถ้ามี (ด้านบน)
         setChildren(c);
       } else {
         setPeople(peopleInitial > 0 ? peopleInitial : 1);
@@ -121,10 +169,7 @@ export default function PaymentStep({
 
   useEffect(() => {
     if (!reservationId) return;
-    localStorage.setItem(
-      SPLIT_KEY(reservationId),
-      JSON.stringify({ people, children })
-    );
+    localStorage.setItem(SPLIT_KEY(reservationId), JSON.stringify({ people, children }));
   }, [reservationId, people, children]);
 
   useEffect(() => {
@@ -165,17 +210,13 @@ export default function PaymentStep({
 
   const addAlaItem = () => {
     const name = newName.trim();
-    const priceNum =
-      typeof newPrice === "string" ? Number(newPrice) : Number(newPrice);
+    const priceNum = typeof newPrice === "string" ? Number(newPrice) : Number(newPrice);
 
     if (!name) return setError("กรุณาระบุชื่อเมนู Ala cart");
     if (!Number.isFinite(priceNum) || priceNum <= 0)
       return setError("กรุณาระบุราคาให้ถูกต้อง (> 0)");
 
-    setAlaItems((arr) => [
-      { id: rid(), name, qty: 1, price: priceNum },
-      ...arr,
-    ]);
+    setAlaItems((arr) => [{ id: rid(), name, qty: 1, price: priceNum }, ...arr]);
     setNewName("");
     setNewPrice("");
     setAddingAla(false);
@@ -216,16 +257,10 @@ export default function PaymentStep({
             <FontAwesomeIcon icon={faMoneyBillWave} />
             ชำระเงิน
           </div>
-          <div className="text-[11px] opacity-90">
-            เลือกแพ็กเกจและเพิ่มเมนู Ala cart
-          </div>
+          <div className="text-[11px] opacity-90">เลือกแพ็กเกจและเพิ่มเมนู Ala cart</div>
         </div>
         {error && (
-          <div
-            role="alert"
-            aria-live="polite"
-            className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
-          >
+          <div role="alert" aria-live="polite" className="mt-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700">
             {error}
           </div>
         )}
@@ -235,9 +270,7 @@ export default function PaymentStep({
       <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-3">
         {/* Packages */}
         <section className="mb-5">
-          <label className="mb-2 block text-xs font-medium text-gray-700">
-            แพ็กเกจ
-          </label>
+          <label className="mb-2 block text-xs font-medium text-gray-700">แพ็กเกจ</label>
           <div className="flex flex-wrap gap-2">
             {packages.map((pk) => {
               const active = selectedPackage === pk;
@@ -278,16 +311,16 @@ export default function PaymentStep({
                   onWheel={preventNumberScroll}
                   className="h-10 w-28 rounded-lg border px-3 text-sm"
                   value={people}
-                  onChange={(e) =>
-                    setPeople(Math.max(1, Number(e.target.value) || 1))
-                  }
+                  onChange={(e) => setPeople(Math.max(1, Number(e.target.value) || 1))}
                   onBlur={handleSaveSeats}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter")
-                      (e.target as HTMLInputElement).blur();
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
                   aria-label="จำนวนผู้ใหญ่"
                 />
+                {loadingPeople && (
+                  <span className="text-xs text-gray-500">กำลังซิงก์ข้อมูล…</span>
+                )}
               </div>
             </div>
 
@@ -305,13 +338,10 @@ export default function PaymentStep({
                   onWheel={preventNumberScroll}
                   className="h-10 w-28 rounded-lg border px-3 text-sm"
                   value={children}
-                  onChange={(e) =>
-                    setChildren(Math.max(0, Number(e.target.value) || 0))
-                  }
+                  onChange={(e) => setChildren(Math.max(0, Number(e.target.value) || 0))}
                   onBlur={handleSaveSeats}
                   onKeyDown={(e) => {
-                    if (e.key === "Enter")
-                      (e.target as HTMLInputElement).blur();
+                    if (e.key === "Enter") (e.target as HTMLInputElement).blur();
                   }}
                   aria-label="จำนวนเด็ก"
                 />
@@ -323,8 +353,7 @@ export default function PaymentStep({
         {/* Ala cart */}
         <section className="mb-5">
           <label className="mb-2 flex items-center gap-2 text-xs font-medium text-gray-700">
-            <FontAwesomeIcon icon={faBowlFood} />
-            เมนู Ala cart
+            เพิ่มเมนู Ala cart
           </label>
 
           {!addingAla ? (
@@ -365,11 +394,7 @@ export default function PaymentStep({
                   className="h-10 w-full rounded-lg border pl-7 pr-3 text-sm"
                   placeholder="ราคา (รวม)"
                   value={newPrice}
-                  onChange={(e) =>
-                    setNewPrice(
-                      Math.max(0, Number(e.target.value) || 0) as number
-                    )
-                  }
+                  onChange={(e) => setNewPrice(Math.max(0, Number(e.target.value) || 0) as number)}
                   aria-label="ราคาสุทธิ"
                 />
               </div>
@@ -408,8 +433,7 @@ export default function PaymentStep({
                     <div className="flex-1">
                       <span className="font-medium">{it.name}</span>{" "}
                       <span className="text-gray-700">
-                        — {it.qty} × {currency(it.price)} ={" "}
-                        {currency(it.qty * it.price)}
+                        — {it.qty} × {currency(it.price)} = {currency(it.qty * it.price)}
                       </span>
                     </div>
                     <button
@@ -435,9 +459,7 @@ export default function PaymentStep({
             <div className="flex items-center justify-between">
               <span className="text-gray-700">แพ็กเกจที่เลือก</span>
               <span className="font-medium">
-                {selectedPackage
-                  ? `${selectedPackage.toLocaleString()} บาท`
-                  : "-"}
+                {selectedPackage ? `${selectedPackage.toLocaleString()} บาท` : "-"}
               </span>
             </div>
 
@@ -453,9 +475,7 @@ export default function PaymentStep({
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-gray-700">
-                รวมแพ็กเกจ (เด็ก • ครึ่งราคา)
-              </span>
+              <span className="text-gray-700">รวมแพ็กเกจ (เด็ก • ครึ่งราคา)</span>
               <span className="font-semibold text-indigo-700">
                 {selectedPackage
                   ? `${childUnit.toLocaleString()} × ${children} คน = ${(
@@ -474,25 +494,19 @@ export default function PaymentStep({
 
             <div className="flex items-center justify-between">
               <span className="font-medium">รวมทั้งสิ้น</span>
-              <span className="font-bold text-indigo-700">
-                {currency(totals.sum)}
-              </span>
+              <span className="font-bold text-indigo-700">{currency(totals.sum)}</span>
             </div>
           </div>
         </section>
 
         <section className="mb-4 rounded-xl border bg-white p-3 text-sm">
           <div className="space-y-2">
-            <div className="text-xs font-medium text-gray-700">
-              ช่องทางชำระเงิน
-            </div>
+            <div className="text-xs font-medium text-gray-700">ช่องทางชำระเงิน</div>
             <div className="flex flex-wrap gap-2">
               {[
                 { key: "cash", label: "เงินสด" },
-                { key: "card", label: "บัตร" },
+                { key: "card", label: "บัตรเครดิต" },
                 { key: "qr", label: "QR/PromptPay" },
-                { key: "transfer", label: "โอนเงิน" },
-                { key: "e-wallet", label: "E-Wallet" },
               ].map((m) => {
                 const active = paymentMethod === (m.key as any);
                 return (
@@ -501,12 +515,7 @@ export default function PaymentStep({
                     type="button"
                     onClick={() =>
                       setPaymentMethod(
-                        m.key as
-                          | "cash"
-                          | "card"
-                          | "qr"
-                          | "transfer"
-                          | "e-wallet"
+                        m.key as "cash" | "card" | "qr" 
                       )
                     }
                     className={[
@@ -529,20 +538,7 @@ export default function PaymentStep({
       {/* Footer (sticky) */}
       <div className="sticky bottom-0 flex flex-none items-center gap-3 border-t bg-white/70 px-4 py-3 backdrop-blur">
         <div className="mr-auto text-sm leading-tight">
-          <div className="font-semibold">
-            รวมทั้งสิ้น {currency(totals.sum)}
-          </div>
-          <div className="text-[11px] text-gray-600">
-            รวมที่นั่ง {totalSeats} คน • ผู้ใหญ่ {people} คน • เด็ก {children}{" "}
-            คน
-            {selectedPackage
-              ? ` • ผู้ใหญ่ ${selectedPackage.toLocaleString()} บาท`
-              : ""}
-            {selectedPackage
-              ? ` • เด็กคนละ ${childUnit.toLocaleString()} บาท`
-              : ""}
-            • Ala cart {totals.ala.toLocaleString()} บาท
-          </div>
+          <div className="font-semibold">รวมทั้งสิ้น {currency(totals.sum)}</div>
         </div>
 
         <button
@@ -558,13 +554,8 @@ export default function PaymentStep({
           type="button"
           onClick={onSubmit}
           className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700 disabled:opacity-60"
-          disabled={
-            busy ||
-            (!selectedPackage && alaItems.length === 0) ||
-            !paymentMethod
-          }
+          disabled={busy || (!selectedPackage && alaItems.length === 0) || !paymentMethod}
         >
-          <FontAwesomeIcon icon={faMoneyBillWave} />
           บันทึกการชำระเงิน
         </button>
       </div>

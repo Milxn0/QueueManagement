@@ -186,20 +186,19 @@ export default function TodayQueuePage() {
     const occ: OccupiedItem[] = (list ?? [])
       .map(
         (o: {
-          id?: string;
-          tbl?: { table_name?: string | null } | null;
+          tableNo?: number;
+          reservationId?: string | null;
           reservation_datetime?: string | null;
           queue_code?: string | null;
         }) => ({
-          tableNo: parseTableNo(o.tbl?.table_name ?? null) ?? 0,
-          reservationId: o.id ?? "",
-          reservation_datetime: o.reservation_datetime ?? "",
+          tableNo: Number(o.tableNo ?? 0),
+          reservationId: o.reservationId ?? "",
+          reservation_datetime: o.reservation_datetime ?? null,
           queue_code: o.queue_code ?? null,
         })
       )
       .filter(
-        (o: { tableNo: number; reservation_datetime: any }) =>
-          o.tableNo > 0 && !!o.reservation_datetime
+        (x: { tableNo: any }) => Number.isFinite(x.tableNo) && x.tableNo > 0
       );
 
     setOccupied(occ);

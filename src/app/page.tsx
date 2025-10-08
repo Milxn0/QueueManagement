@@ -214,7 +214,7 @@ export default function HomePage() {
 
       {/* คิวถัดไป (เฉพาะที่ยืนยันแล้ว) */}
       <section className="space-y-4">
-        <h2 className="text-lg font-medium">คิวถัดไป</h2>
+        <h2 className="text-lg font-medium">คิวทั้งหมด</h2>
 
         {loading ? (
           <div className="rounded-xl border px-4 py-5 text-sm text-gray-500">
@@ -222,7 +222,7 @@ export default function HomePage() {
           </div>
         ) : otherQueues.length === 0 ? (
           <div className="rounded-xl border px-4 py-5 text-sm text-gray-500">
-            ยังไม่มีคิวถัดไป (ที่ยืนยันแล้ว)
+            ยังไม่มีคิวในระบบ
           </div>
         ) : (
           <ul className="divide-y rounded-xl border overflow-hidden">
