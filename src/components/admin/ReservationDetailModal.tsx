@@ -622,7 +622,39 @@ export default function ReservationDetailModal({
       setDelBusy(false);
     }
   };
+  const ALLOW_DIFF_MIN = 10;
+  async function canConfirmThisReservation(
+    targetId: string,
+    targetISO: string | null
+  ) {
+    if (!targetId || !targetISO) return true;
 
+    try {
+        .from("reservations")
+        .select("id, reservation_datetime")
+        .eq("status", "waiting")
+        .is("cancelled_at", null)
+        .order("reservation_datetime", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) return true;
+      if (!earliest) return true;
+
+      if (earliest.id === targetId) return true;
+
+      const t = new Date(targetISO).getTime();
+      const e = new Date(earliest.reservation_datetime as string).getTime();
+      const diffMin = (t - e) / (60 * 1000);
+
+      if (diffMin <= ALLOW_DIFF_MIN) return true;
+
+      showError("กรุณายืนยันคิวก่อนหน้าก่อน");
+      return false;
+    } catch {
+      return true;
+    }
+  }
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center"
@@ -1274,6 +1306,12 @@ export default function ReservationDetailModal({
                       <button
                         type="button"
                         onClick={async () => {
+                          const okToConfirm = await canConfirmThisReservation(
+                            row.id,
+                            row.reservation_datetime ?? null
+                          );
+                          if (!okToConfirm) return;
+
                           await onConfirm(row.id);
                           onUpdated?.();
                           handleClose();

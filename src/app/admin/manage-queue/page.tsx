@@ -21,6 +21,16 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 
 export default function ManageQueuesPage() {
   const supabase = useMemo(() => createClient(), []);
+  type SortKey =
+    | "time-desc"
+    | "time-asc"
+    | "code-asc"
+    | "code-desc"
+    | "name-asc"
+    | "name-desc"
+    | "seats-asc"
+    | "seats-desc";
+  const [sortBy, setSortBy] = useState<SortKey>("time-desc");
 
   // ---------- Auth gate ----------
   const [loading, setLoading] = useState(true);
@@ -213,7 +223,45 @@ export default function ManageQueuesPage() {
 
     setOccupied(occ);
   }, []);
+  const sortedRows = useMemo(() => {
+    const rows = [...displayRows];
 
+    const toTime = (iso?: string | null) => {
+      const d = iso ? new Date(iso) : null;
+      return d && !isNaN(d.getTime()) ? d.getTime() : 0;
+    };
+    const safeStr = (v: unknown) => String(v ?? "").toLowerCase();
+    const safeNum = (v: unknown) => Number(v ?? 0);
+
+    rows.sort((a: any, b: any) => {
+      switch (sortBy) {
+        case "time-asc":
+          return (
+            toTime(a.reservation_datetime) - toTime(b.reservation_datetime)
+          );
+        case "time-desc":
+          return (
+            toTime(b.reservation_datetime) - toTime(a.reservation_datetime)
+          );
+        case "code-asc":
+          return safeStr(a.queue_code).localeCompare(safeStr(b.queue_code));
+        case "code-desc":
+          return safeStr(b.queue_code).localeCompare(safeStr(a.queue_code));
+        case "name-asc":
+          return safeStr(a.user?.name).localeCompare(safeStr(b.user?.name));
+        case "name-desc":
+          return safeStr(b.user?.name).localeCompare(safeStr(a.user?.name));
+        case "seats-asc":
+          return safeNum(a.partysize) - safeNum(b.partysize);
+        case "seats-desc":
+          return safeNum(b.partysize) - safeNum(a.partysize);
+        default:
+          return 0;
+      }
+    });
+
+    return rows;
+  }, [displayRows, sortBy]);
   // ---------- UI ----------
   if (loading) {
     return (
@@ -308,12 +356,29 @@ export default function ManageQueuesPage() {
               </div>
             )}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="w-full basis-full mt-2 flex items-center gap-2">
+              <div className="flex items-center gap-2">
+                <label className="text-sm text-gray-600">Sort by</label>
+                <select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortKey)}
+                  className="rounded-xl border px-3 py-1.5 text-sm"
+                >
+                  <option value="time-desc">เวลา (ใหม่→เก่า)</option>
+                  <option value="time-asc">เวลา (เก่า→ใหม่)</option>
+                  <option value="code-asc">โค้ดคิว A→Z</option>
+                  <option value="code-desc">โค้ดคิว Z→A</option>
+                  <option value="name-asc">ชื่อ ก→ฮ</option>
+                  <option value="name-desc">ชื่อ ฮ→ก</option>
+                  <option value="seats-asc">ที่นั่ง น้อย→มาก</option>
+                  <option value="seats-desc">ที่นั่ง มาก→น้อย</option>
+                </select>
+              </div>
               <input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="ค้นหา: โค้ดคิว / ชื่อ / เบอร์ / อีเมล"
-                className="w-72 rounded-xl border px-3 py-1.5 text-sm"
+                className="flex-1 min-w-[220px] md:min-w-[320px] max-w-xl rounded-xl border px-3 py-1.5 text-sm"
               />
               <div className="text-sm text-gray-500">
                 แสดง {displayRows.length} รายการ (ล่าสุด 200 แถว)
@@ -323,7 +388,7 @@ export default function ManageQueuesPage() {
 
           <div className="overflow-x-auto">
             <ManageQueueTable
-              displayRows={displayRows}
+              displayRows={sortedRows}
               rowsLoading={rowsLoading}
               openDetail={(r) => {
                 void openDetail(r as ReservationRow);

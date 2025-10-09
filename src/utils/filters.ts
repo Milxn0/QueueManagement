@@ -2,7 +2,7 @@ import type { FilterKey, StatusKey } from "@/types/filters";
 
 export const FILTERS: { key: FilterKey; label: string }[] = [
   { key: "all", label: "คิวทั้งหมด" },
-  { key: "month", label: "คิวรายเดือนเดือน" },
+  { key: "month", label: "คิวรายเดือน" },
   { key: "year", label: "คิวรายปี" },
   { key: "cancelled", label: "คิวที่ยกเลิก" },
 ];
