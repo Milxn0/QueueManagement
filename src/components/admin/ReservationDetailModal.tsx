@@ -630,6 +630,7 @@ export default function ReservationDetailModal({
     if (!targetId || !targetISO) return true;
 
     try {
+      const { data: earliest, error } = await supabase
         .from("reservations")
         .select("id, reservation_datetime")
         .eq("status", "waiting")
