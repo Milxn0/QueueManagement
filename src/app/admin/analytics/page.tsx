@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useCallback, useMemo, useState } from "react";
@@ -15,21 +16,19 @@ import {
   buildReservationSeries,
   exportReservationsCSV,
 } from "@/utils/analytics";
+import SummaryCards from "@/components/admin/analytics/SummaryCards";
 
 export default function AnalyticsPage() {
   const supabase = useMemo(() => createClient(), []);
 
-  // เดือนเริ่มต้น (YYYY-MM)
   const initialMonth = new Date().toISOString().slice(0, 7);
   const [selectedMonth, setSelectedMonth] = useState<string>(initialMonth);
 
-  // ขอบเขตวันที่ของเดือนนั้น ๆ + จำนวนวันในเดือน
   const { startISO, endISO, daysInMonth } = useMemo(
     () => monthRangeFromYYYYMM(selectedMonth),
     [selectedMonth]
   );
 
-  // แถบควบคุมการ Export
   const {
     mode,
     setMode,
@@ -54,7 +53,7 @@ export default function AnalyticsPage() {
     dataset: "reservations",
     startISO,
     endISO,
-    debouncedName: "", 
+    debouncedName: "",
   });
 
   const { series, maxY } = useMemo(
@@ -67,42 +66,73 @@ export default function AnalyticsPage() {
     [loading, series]
   );
 
-  const chartTitle = "กราฟการจอง (ต่อวัน)";
+  const chartTitle = "อัตราการจอง";
+  const { totalCount, paidCount, cancelCount } = useMemo(() => {
+    let total = 0,
+      paid = 0,
+      cancel = 0;
+    for (const r of rows ?? []) {
+      total++;
+      const s = String((r as any).status ?? "").toLowerCase();
+      if (s === "paid") paid++;
+      else if (s === "cancel" || s === "cancelled") cancel++;
+    }
+    return { totalCount: total, paidCount: paid, cancelCount: cancel };
+  }, [rows]);
 
   return (
     <main className="mx-auto max-w-6xl px-6 py-10">
-      {/* Header */}
-      <HeaderCard
-        selectedMonth={selectedMonth}
-        onChangeMonth={setSelectedMonth}
-      />
+      <HeaderCard />
 
       <section className="mb-6 rounded-2xl border bg-white shadow-sm">
-        <div className="flex flex-col gap-3 border-b bg-gray-50 px-5 py-4 md:flex-row md:items-center md:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="grid gap-4 p-5 md:grid-cols-2">
+          <div className="rounded-xl border bg-white p-4">
+            <label className="text-xs text-gray-500">
+              เลือกเดือนสำหรับดูสถิติ
+            </label>
+            <div className="mt-2 hidden md:block">
+              <input
+                type="month"
+                value={selectedMonth}
+                onChange={(e) => setSelectedMonth(e.target.value)}
+                className="rounded-xl border px-3 py-2 text-sm bg-white"
+                aria-label="เลือกเดือน (เดสก์ท็อป)"
+              />
+            </div>
+            <div className="mt-2 md:hidden">
+              <MonthPickerMobile
+                value={selectedMonth}
+                onChange={setSelectedMonth}
+              />
+            </div>
           </div>
 
-          {/* quick month (mobile) */}
-          <MonthPickerMobile
-            value={selectedMonth}
-            onChange={setSelectedMonth}
-          />
-
-          <ExportControlsBar
-            mode={mode}
-            setMode={setMode}
-            dayVal={dayVal}
-            setDayVal={setDayVal}
-            monthVal={monthVal}
-            setMonthVal={setMonthVal}
-            yearVal={yearVal}
-            setYearVal={setYearVal}
-            exporting={exporting || loading}
-            onExport={exportCSV}
-          />
+          {/* Export */}
+          <div className="rounded-xl border bg-white p-4">
+            <div className="mb-2 text-xs text-gray-500">Export สถิการจอง</div>
+            <ExportControlsBar
+              mode={mode}
+              setMode={setMode}
+              dayVal={dayVal}
+              setDayVal={setDayVal}
+              monthVal={monthVal}
+              setMonthVal={setMonthVal}
+              yearVal={yearVal}
+              setYearVal={setYearVal}
+              exporting={exporting || loading}
+              onExport={exportCSV}
+            />
+          </div>
         </div>
       </section>
-
+      {/* Summary cards */}
+      <div className="mb-6">
+        <SummaryCards
+          total={totalCount}
+          paid={paidCount}
+          cancelled={cancelCount}
+        />
+      </div>
       {/* Chart Section */}
       <AnalyticsChartSection
         titleLeft={chartTitle}

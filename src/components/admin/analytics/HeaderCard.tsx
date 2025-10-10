@@ -2,11 +2,7 @@
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faChartSimple } from "@fortawesome/free-solid-svg-icons/faChartSimple";
 
-type Props = {
-  selectedMonth: string;
-  onChangeMonth: (v: string) => void;
-};
-export default function HeaderCard({ selectedMonth, onChangeMonth }: Props) {
+export default function HeaderCard() {
   return (
     <div className="relative mb-6 overflow-hidden rounded-2xl border border-indigo-100 bg-gradient-to-br from-white to-indigo-50/60">
       <div className="flex items-start justify-between p-6">
@@ -19,18 +15,8 @@ export default function HeaderCard({ selectedMonth, onChangeMonth }: Props) {
             สถิติของระบบ
           </h1>
           <p className="mt-1 text-sm text-gray-600">
-            เลือก “มุมมองข้อมูล”, เดือน, และพิมพ์ชื่อ
+            ภาพรวมข้อมูลการจองประจำวันที่เลือก
           </p>
-        </div>
-        <div className="hidden md:flex items-center gap-2">
-          <label className="text-xs text-gray-500">เดือน</label>
-          <input
-            type="month"
-            value={selectedMonth}
-            onChange={(e) => onChangeMonth(e.target.value)}
-            className="rounded-xl border px-3 py-2 text-sm bg-white"
-            aria-label="เลือกเดือน"
-          />
         </div>
       </div>
     </div>

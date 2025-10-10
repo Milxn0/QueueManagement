@@ -96,7 +96,7 @@ export default function AnalyticsChartSection({
             {selIndex !== null && (
               <div className="mt-6 rounded-xl border bg-white p-4">
                 <div className="mb-2 text-sm font-medium text-gray-900">
-                  สัดส่วน Paid / Cancel ของวันที่ {selIndex + 1}
+                  สัดส่วนของการจองในวันที่ {selIndex + 1}
                 </div>
 
                 {pieLoading ? (
