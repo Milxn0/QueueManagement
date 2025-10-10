@@ -1100,9 +1100,6 @@ export default function ReservationDetailModal({
                   <div className="text-sm font-semibold text-indigo-800">
                     เลือกโต๊ะ
                   </div>
-                  <div className="text-[11px] text-indigo-600">
-                    เงื่อนไข: รวมความจุ (cap+2) ≥ จำนวนที่นั่ง
-                  </div>
                 </div>
 
                 <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">

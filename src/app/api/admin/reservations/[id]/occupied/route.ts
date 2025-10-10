@@ -2,21 +2,32 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
 
+function first<T>(v: T | T[] | null | undefined): T | null {
+  if (Array.isArray(v)) return v[0] ?? null;
+  return (v ?? null) as T | null;
+}
+
 export async function GET(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> }
 ) {
   try {
     const { id: reservationId } = await ctx.params;
-    if (!reservationId) return NextResponse.json({ error: "reservationId missing" }, { status: 400 });
+    if (!reservationId)
+      return NextResponse.json(
+        { error: "reservationId missing" },
+        { status: 400 }
+      );
 
     const url = new URL(req.url);
     const dt = url.searchParams.get("dt");
 
     const base = dt ? new Date(dt) : new Date();
-    if (Number.isNaN(base.getTime())) return NextResponse.json({ error: "invalid dt" }, { status: 400 });
+    if (Number.isNaN(base.getTime()))
+      return NextResponse.json({ error: "invalid dt" }, { status: 400 });
 
-    const DINE_MIN_MS = Number(process.env.NEXT_PUBLIC_DINE_MINUTES || 90) * 60 * 1000;
+    const DINE_MIN_MS =
+      Number(process.env.NEXT_PUBLIC_DINE_MINUTES || 90) * 60 * 1000;
 
     const myStart = new Date(base.getTime() - DINE_MIN_MS);
     const myEnd = new Date(base.getTime() + DINE_MIN_MS);
@@ -26,7 +37,6 @@ export async function GET(
 
     const supabase = createServiceClient();
 
-    // ดึงเฉพาะ mapping ที่ "ยัง active" และสถานะคิวที่ส่งผลกับการกันโต๊ะ (ไม่รวม paid)
     const { data, error } = await supabase
       .from("reservation_tables")
       .select(
@@ -39,26 +49,38 @@ export async function GET(
       `
       )
       .neq("reservation_id", reservationId)
-      .is("released_at", null) // ⬅️ แถวที่ยัง active เท่านั้น
+      .is("released_at", null)
       .is("reservations.cancelled_at", null)
       .in("reservations.status", [
-        "seated", "confirmed", "confirm",
-        "Seated", "Confirmed", "Confirm"
+        "seated",
+        "confirmed",
+        "confirm",
+        "Seated",
+        "Confirmed",
+        "Confirm",
       ])
       .gte("reservations.reservation_datetime", fetchStart)
       .lte("reservations.reservation_datetime", fetchEnd);
 
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (error)
+      return NextResponse.json({ error: error.message }, { status: 500 });
 
     const uniq = new Map<number, any>();
 
-    for (const row of data ?? []) {
-      const name: string = row?.tables?.table_name ?? "";
+    for (const row of (data ?? []) as any[]) {
+      const t = first<{ table_name: string | null }>(row?.tables);
+      const r = first<{
+        id: string | null;
+        queue_code: string | null;
+        reservation_datetime: string | null;
+      }>(row?.reservations);
+
+      const name: string = t?.table_name ?? "";
       const tableNoMatch = String(name).match(/\d+/);
       const tableNo = tableNoMatch ? Number(tableNoMatch[0]) : NaN;
       if (!Number.isFinite(tableNo)) continue;
 
-      const otherISO: string | null = row?.reservations?.reservation_datetime ?? null;
+      const otherISO: string | null = r?.reservation_datetime ?? null;
       if (!otherISO) continue;
 
       const other = new Date(otherISO);
@@ -73,8 +95,8 @@ export async function GET(
       if (!uniq.has(tableNo)) {
         uniq.set(tableNo, {
           tableNo,
-          reservationId: row?.reservations?.id ?? null,
-          queue_code: row?.reservations?.queue_code ?? null,
+          reservationId: r?.id ?? null,
+          queue_code: r?.queue_code ?? null,
           reservation_datetime: otherISO,
         });
       }
@@ -82,6 +104,9 @@ export async function GET(
 
     return NextResponse.json(Array.from(uniq.values()), { status: 200 });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message ?? "unknown error" }, { status: 500 });
+    return NextResponse.json(
+      { error: e?.message ?? "unknown error" },
+      { status: 500 }
+    );
   }
 }
