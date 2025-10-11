@@ -2,6 +2,7 @@ import "./globals.css";
 import Navbar from "@/components/user/Navbar";
 import { Prompt } from "next/font/google";
 import Providers from "./providers";
+import { Suspense } from "react";
 const prompt = Prompt({
   subsets: ["latin", "thai"],
   weight: ["100", "200", "300", "400", "500", "600", "700", "800", "900"],
@@ -24,10 +25,12 @@ export default function RootLayout({
   return (
     <html lang="th" className={prompt.variable}>
       <body className="font-prompt bg-gray-50">
-        <Providers>
-          <Navbar />
-          {children}
-        </Providers>
+        <Suspense fallback={null}>
+          <Providers>
+            <Navbar />
+            {children}
+          </Providers>
+        </Suspense>
       </body>
     </html>
   );
