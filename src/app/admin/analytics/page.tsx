@@ -11,12 +11,13 @@ import {
   MonthPickerMobile,
   AnalyticsChartSection,
 } from "@/components/admin/analytics";
-import { useExportControls, useAnalyticsData } from "@/hooks/analytics";
+import { useExportControls } from "@/hooks/analytics";
 import {
   buildReservationSeries,
   exportReservationsCSV,
 } from "@/utils/analytics";
 import SummaryCards from "@/components/admin/analytics/SummaryCards";
+import { useAnalyticsData } from "@/hooks/analytics/useAnalyticsData";
 
 export default function AnalyticsPage() {
   const supabase = useMemo(() => createClient(), []);
