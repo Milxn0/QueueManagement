@@ -21,6 +21,7 @@ import {
   faCrown,
   faUserGear,
   faUserTie,
+  faAddressCard,
 } from "@fortawesome/free-solid-svg-icons";
 
 export type Role = "admin" | "staff" | "customer" | string;
@@ -266,6 +267,7 @@ export default function UserDetailModal({
           <div className="flex items-start justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-100">
+              <FontAwesomeIcon icon={faAddressCard} />
                 รายละเอียดผู้ใช้
               </div>
               <h3 className="mt-2 text-lg font-semibold text-gray-900">

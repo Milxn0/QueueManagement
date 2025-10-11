@@ -8,6 +8,7 @@ import Link from "next/link";
 import type { AppSettings } from "@/types/appsetting";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faGear } from "@fortawesome/free-solid-svg-icons/faGear";
+import { faFloppyDisk } from "@fortawesome/free-solid-svg-icons";
 
 export default function SettingsPage() {
   const supabase = useMemo(() => createClient(), []);
@@ -70,9 +71,11 @@ export default function SettingsPage() {
         close_time: "20:30",
         days_ahead: 30,
         store_name: "SEOUL BBQ",
-        store_image_url: "https://xrxnwricckxzuhswoasc.supabase.co/storage/v1/object/public/public/store/main_1757518439926_38opvx.jpg",
+        store_image_url:
+          "https://xrxnwricckxzuhswoasc.supabase.co/storage/v1/object/public/public/store/main_1757518439926_38opvx.jpg",
         contact_phone: "074-239-246",
-        contact_ig: "https://www.instagram.com/seoulkoreanbbq_hatyai?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
+        contact_ig:
+          "https://www.instagram.com/seoulkoreanbbq_hatyai?utm_source=ig_web_button_share_sheet&igsh=ZDNlZDc0MzIxNw==",
         contact_facebook: "https://www.facebook.com/koreanbbqhatyai",
         menu_url: "",
       };
@@ -139,9 +142,7 @@ export default function SettingsPage() {
           <h1 className="mt-2 text-2xl md:text-3xl font-semibold tracking-tight text-gray-900">
             การตั้งค่าระบบจอง & ข้อมูลร้าน
           </h1>
-          <p className="mt-1 text-sm text-gray-600">
-            เข้าถึงได้เฉพาะ Admin
-          </p>
+          <p className="mt-1 text-sm text-gray-600">เข้าถึงได้เฉพาะ Admin</p>
         </div>
       </div>
 
@@ -324,9 +325,7 @@ export default function SettingsPage() {
               }}
               className="mt-1 block w-full rounded-lg border px-3 py-2 text-sm file:mr-3 file:rounded-md file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-indigo-700 hover:file:bg-indigo-100"
             />
-            <p className="mt-2 text-xs text-red-500">
-              *รองรับแค่ JPG/PNG/WebP
-            </p>
+            <p className="mt-2 text-xs text-red-500">*รองรับแค่ JPG/PNG/WebP</p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
@@ -356,9 +355,7 @@ export default function SettingsPage() {
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               placeholder="Instagram URL"
             />
-            <p className="mt-2 text-xs text-red-500">
-              *รองรับแค่ URL เท่านั้น
-            </p>
+            <p className="mt-2 text-xs text-red-500">*รองรับแค่ URL เท่านั้น</p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
@@ -376,9 +373,7 @@ export default function SettingsPage() {
               className="mt-1 w-full rounded-lg border px-3 py-2 text-sm"
               placeholder="Facebook URL"
             />
-            <p className="mt-2 text-xs text-red-500">
-              *รองรับแค่ URL เท่านั้น
-            </p>
+            <p className="mt-2 text-xs text-red-500">*รองรับแค่ URL เท่านั้น</p>
           </div>
 
           <div className="rounded-xl border px-4 py-3">
@@ -403,6 +398,7 @@ export default function SettingsPage() {
             disabled={saving}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60"
           >
+            <FontAwesomeIcon icon={faFloppyDisk} />{" "}
             {saving ? "กำลังบันทึก…" : "บันทึกการตั้งค่า"}
           </button>
         </div>

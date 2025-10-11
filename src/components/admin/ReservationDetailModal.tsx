@@ -113,7 +113,8 @@ export default function ReservationDetailModal({
       .select(
         `
         id, reservation_datetime, status, partysize, comment, cancelled_at,
-        cancelled_reason, cancelled_by_user_id
+        cancelled_reason, cancelled_by_user_id,
+        user:user_id(id, name, phone)
       `
       )
       .eq("id", row.id)
@@ -127,10 +128,15 @@ export default function ReservationDetailModal({
     setDisplayDatetime(data?.reservation_datetime ?? null);
     setDisplayPartysize(data?.partysize ?? null);
     setDisplayComment(data?.comment ?? null);
-    await loadAssignedTables(); // ⬅️ รีเฟรชรายชื่อโต๊ะที่นั่งอยู่
+    setDisplayphone(
+      (data as any)?.user?.phone ??
+        (row as any)?.user?.phone ??
+        (row as any)?.user?.phone ??
+        null
+    );
+    await loadAssignedTables();
   }
 
-  // ⬇️ โหลดรายการโต๊ะที่ mapping กับ reservation นี้ทั้งหมด
   const [assignedTables, setAssignedTables] = useState<
     { id: string; name: string; no: number | null }[]
   >([]);
@@ -329,6 +335,9 @@ export default function ReservationDetailModal({
   const [displayComment, setDisplayComment] = useState<string | null>(
     row?.comment ?? null
   );
+  const [displayPhone, setDisplayphone] = useState<string | null>(
+    (row as any)?.user?.phone ?? (row as any)?.phone ?? null
+  );
   const requiredSeats = Number(displayPartysize ?? 0) || 0;
   const need = Math.max(0, requiredSeats - allowedSum);
   const canSave = picked.length > 0 && need === 0;
@@ -370,6 +379,25 @@ export default function ReservationDetailModal({
   );
   const [isAdmin, setIsAdmin] = useState(false);
 
+  const [appSettings, setAppSettings] = useState<{
+    days_ahead: number;
+    open_time: string;
+    close_time: string;
+  } | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase
+          .from("app_settings")
+          .select("days_ahead, open_time, close_time")
+          .eq("id", 1)
+          .single();
+        if (data) setAppSettings(data as any);
+      } catch {}
+    })();
+  }, [supabase]);
+
   // โหลดรายการโต๊ะที่ชนเวลา (รอบ ๆ วัน/เวลาเดียวกัน) เพื่อ disable ปุ่ม
   useEffect(() => {
     if (!open || tableStep !== 1 || !row?.id) return;
@@ -393,6 +421,46 @@ export default function ReservationDetailModal({
       }
     })();
   }, [open, tableStep, row?.id, displayDatetime]);
+
+  const minEditDateTime = useMemo(() => {
+    const now = new Date();
+    const in15 = new Date(now.getTime() + 15 * 60 * 1000);
+
+    const { H: oH, M: oM } = parseHHMM(appSettings?.open_time ?? "09:00");
+    const { H: cH, M: cM } = parseHHMM(appSettings?.close_time ?? "21:00");
+
+    const todayOpen = new Date();
+    todayOpen.setHours(oH, oM, 0, 0);
+
+    const todayClose = new Date();
+    todayClose.setHours(cH, cM, 0, 0);
+
+    let candidate = in15 < todayOpen ? todayOpen : in15;
+
+    if (candidate > todayClose) {
+      const nextOpen = new Date(todayOpen);
+      nextOpen.setDate(nextOpen.getDate() + 1);
+      candidate = nextOpen;
+    }
+
+    return toInputLocal(candidate);
+  }, [appSettings?.open_time, appSettings?.close_time]);
+
+  const maxEditDateTime = useMemo(() => {
+    const daysAhead = Number(appSettings?.days_ahead ?? 30);
+    const { H: cH, M: cM } = parseHHMM(appSettings?.close_time ?? "23:59");
+
+    const d = new Date();
+    d.setDate(d.getDate() + daysAhead);
+    d.setHours(cH, cM, 0, 0);
+
+    return toInputLocal(d);
+  }, [appSettings?.days_ahead, appSettings?.close_time]);
+
+  function parseHHMM(s?: string | null) {
+  const [h, m] = String(s ?? "").split(":").map((x) => Number(x));
+  return { H: Number.isFinite(h) ? h : 0, M: Number.isFinite(m) ? m : 0 };
+}
 
   useEffect(() => {
     (async () => {
@@ -421,6 +489,7 @@ export default function ReservationDetailModal({
     setDisplayDatetime(row?.reservation_datetime ?? null);
     setDisplayPartysize(row?.partysize ?? null);
     setDisplayComment(row?.comment ?? null);
+    setDisplayphone((row as any)?.user?.phone ?? (row as any)?.phone ?? null);
     const d = parseDate(row?.reservation_datetime ?? null);
     setEditDate(d ? toInputLocal(d) : "");
     setEditSize(
@@ -436,7 +505,7 @@ export default function ReservationDetailModal({
     setOk(null);
     setShowPayment(false);
     setOptimisticTableNo(currentTableNo ?? null);
-    loadAssignedTables(); // ⬅️ โหลดโต๊ะที่นั่งอยู่เมื่อเปิด/เปลี่ยนเรคคอร์ด
+    loadAssignedTables();
   }, [row?.id, open, currentTableNo]);
 
   // ดึงบิลเฉพาะตอน paid
@@ -656,6 +725,7 @@ export default function ReservationDetailModal({
       return true;
     }
   }
+
   return (
     <div
       className="fixed inset-0 z-[60] flex items-center justify-center"
@@ -686,6 +756,12 @@ export default function ReservationDetailModal({
                 รหัสคิว{" "}
                 <span className="font-medium text-indigo-700">
                   {row.queue_code ?? "—"}
+                </span>
+              </div>
+              <div className="mt-1 text-xs opacity-90">
+                เบอร์โทรติดต่อ{" "}
+                <span className="font-medium text-indigo-700">
+                  {displayPhone ?? "—"}
                 </span>
               </div>
             </div>
@@ -1041,6 +1117,9 @@ export default function ReservationDetailModal({
                       value={editDate}
                       onChange={(e) => setEditDate(e.target.value)}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
+                      min={minEditDateTime}
+                      max={maxEditDateTime}
+                      step={60 * 5}
                     />
                   </div>
 

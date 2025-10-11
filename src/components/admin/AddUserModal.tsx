@@ -8,6 +8,12 @@ import {
   faTriangleExclamation,
   faCircleCheck,
   faXmark,
+  faUser,
+  faAt,
+  faPhone,
+  faUserShield,
+  faLock,
+  faFloppyDisk,
 } from "@fortawesome/free-solid-svg-icons";
 import { AppUser, Role } from "@/types/appuser";
 
@@ -160,7 +166,8 @@ export default function AddUserModal({
           <div className="grid grid-cols-1 gap-3">
             <div>
               <label className="text-xs text-gray-600">
-                ชื่อ <span className="text-rose-600">*</span>
+                <FontAwesomeIcon icon={faUser} /> ชื่อ{" "}
+                <span className="text-rose-600">*</span>
               </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
@@ -173,7 +180,8 @@ export default function AddUserModal({
             </div>
             <div>
               <label className="text-xs text-gray-600">
-                อีเมล <span className="text-rose-600">*</span>
+                <FontAwesomeIcon icon={faAt} /> อีเมล{" "}
+                <span className="text-rose-600">*</span>
               </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
@@ -187,7 +195,7 @@ export default function AddUserModal({
             </div>
             <div>
               <label className="text-xs text-gray-600">
-                เบอร์โทร (ไม่บังคับ)
+                <FontAwesomeIcon icon={faPhone} /> เบอร์โทร (ไม่บังคับ)
               </label>
               <input
                 className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
@@ -200,7 +208,9 @@ export default function AddUserModal({
             </div>
             <div className="flex items-center gap-3">
               <div className="flex-1">
-                <label className="text-xs text-gray-600">บทบาท</label>
+                <label className="text-xs text-gray-600">
+                  <FontAwesomeIcon icon={faUserShield} /> บทบาท
+                </label>
                 <select
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
                   value={form.role}
@@ -216,7 +226,8 @@ export default function AddUserModal({
               </div>
               <div className="flex-1">
                 <label className="text-xs text-gray-600">
-                  รหัสผ่านเริ่มต้น <span className="text-rose-600">*</span>
+                  <FontAwesomeIcon icon={faLock} /> รหัสผ่านเริ่มต้น{" "}
+                  <span className="text-rose-600">*</span>
                 </label>
                 <input
                   className="mt-1 w-full rounded-xl border px-3 py-2 text-sm"
@@ -246,7 +257,8 @@ export default function AddUserModal({
             disabled={!canSubmit || busy}
             className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-700 disabled:opacity-60"
           >
-            {busy ? "กำลังบันทึก…" : "สร้างผู้ใช้"}
+            <FontAwesomeIcon icon={faFloppyDisk} />{" "}
+            {busy ? "กำลังบันทึก…" : "บันทึกข้อมูล"}
           </button>
         </div>
       </div>
