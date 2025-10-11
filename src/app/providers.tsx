@@ -13,7 +13,8 @@ export function AuthAnalyticsHook() {
   const supabase = createClient();
 
   useEffect(() => {
-    if (!supabase) return; 
+    if (!supabase?.auth?.onAuthStateChange) return;
+
     const { data: sub } = supabase.auth.onAuthStateChange(
       async (_e: any, session: { user?: { id?: string } } | null) => {
         const uid = session?.user?.id;
