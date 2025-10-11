@@ -1,11 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
+export const runtime = "nodejs";
 
-export async function PATCH(req: Request, ctx: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const supabase = createServiceClient();
-    const { id } = ctx.params;
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const reservation_datetime: string | undefined = body?.reservation_datetime;
     const partysizeRaw = body?.partysize;
