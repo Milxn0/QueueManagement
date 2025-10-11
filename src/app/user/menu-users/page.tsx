@@ -150,7 +150,7 @@ export default function Page() {
         {filteredMenuItems.length === 0 && (
           <div className="text-center py-12">
             <p className="text-gray-500 text-lg">
-              ไม่มีเมนูในหมวดหมู่ "{selectedCategory}"
+              ไม่มีเมนูในหมวดหมู่ &quot;{selectedCategory}&quot;
             </p>
           </div>
         )}
