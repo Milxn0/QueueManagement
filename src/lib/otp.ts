@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabaseClient";
 
 export function genOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
@@ -6,6 +6,7 @@ export function genOTP() {
 
 /** สร้างและบันทึก OTP ลงฐานข้อมูล แล้วคืนค่า code  */
 export async function createOTP(phone: string) {
+  const supabase = createClient();
   const code = genOTP();
   const { error } = await supabase.from("otp_verifications").insert({
     phone,
@@ -17,6 +18,7 @@ export async function createOTP(phone: string) {
 
 /** ตรวจ OTP ล่าสุดของหมายเลขโทรศัพท์ */
 export async function verifyOTP(phone: string, code: string) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("otp_verifications")
     .select("*")

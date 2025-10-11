@@ -1,10 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import {
-  createServerAuthedClient,
-  createServiceClient,
-} from "@/lib/supabaseService";
-
+import { createServiceClient } from "@/lib/supabaseService";
+export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const { id } = await req.json();
@@ -13,7 +10,7 @@ export async function POST(req: Request) {
     }
 
     // 1) ตรวจสิทธิ์ผู้เรียก (ต้องเป็น admin)
-    const supabase = await createServerAuthedClient();
+    const supabase = await createServiceClient();
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) {
       return NextResponse.json({ error: "ต้องเข้าสู่ระบบ" }, { status: 401 });

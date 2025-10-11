@@ -1,7 +1,7 @@
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabaseClient";
 import { tableNameFromNo } from "@/utils/tables";
 import { genQueueCode } from "@/utils/queue";
-
+const supabase = createClient();
 export async function findTableIdByNo(no: number) {
   const { data, error } = await supabase
     .from("tables")

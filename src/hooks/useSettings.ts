@@ -1,12 +1,13 @@
+/* eslint-disable react-hooks/exhaustive-deps */
 "use client";
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabaseClient";
 
 export type AppSettings = {
   id: number;
   is_system_open: boolean | null;
-  open_time: string | null;    
-  close_time: string | null;   
+  open_time: string | null;
+  close_time: string | null;
   days_ahead: number | null;
   store_name: string | null;
   store_image_url: string | null;
@@ -36,7 +37,7 @@ export function useSettings() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
+  const supabase = createClient();
   async function load() {
     setLoading(true);
     setError(null);

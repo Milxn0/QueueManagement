@@ -1,4 +1,4 @@
-import { supabase } from "@/lib/supabaseClient";
+import { createClient } from "@/lib/supabaseClient";
 
 export type ProfilePatch = {
   name?: string | null;
@@ -7,6 +7,7 @@ export type ProfilePatch = {
 };
 
 export async function ensureProfile(userId: string, patch: ProfilePatch) {
+  const supabase = createClient();
   const { data, error } = await supabase
     .from("users")
     .select("id")
