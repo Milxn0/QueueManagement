@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
-
+export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
     const { userId, newPassword } = await req.json();

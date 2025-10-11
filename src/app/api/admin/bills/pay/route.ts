@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
-
+export const runtime = "nodejs";
 type AlaItem = { id?: string; name: string; qty: number; price: number };
 
 export async function POST(req: Request) {

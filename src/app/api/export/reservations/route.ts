@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import ExcelJS from "exceljs";
-
+export const runtime = "nodejs";
 // === Helper: คำนวณช่วงเวลา ===
 function getRange(range: "today" | "month") {
   const now = new Date();

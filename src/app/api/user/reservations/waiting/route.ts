@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverSupabase } from "@/app/api/_helpers/supabaseServer";
 import { listUserwaitingReservations } from "@/server/controllers/reservationsController";
-
+export const runtime = "nodejs";
 export async function GET() {
   const sb = serverSupabase();
   const {

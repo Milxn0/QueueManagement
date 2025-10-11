@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
-
+export const runtime = "nodejs";
 function first<T>(v: T | T[] | null | undefined): T | null {
   if (Array.isArray(v)) return v[0] ?? null;
   return (v ?? null) as T | null;

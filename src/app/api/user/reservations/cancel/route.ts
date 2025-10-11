@@ -2,7 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
-
+export const runtime = "nodejs";
 export async function POST(req: Request) {
   const { id, reason } = await req.json();
 

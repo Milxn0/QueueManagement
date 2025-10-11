@@ -1,11 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
-
-/**
- * POST /api/admin/reservations/:id/assign-tables
- * body: { tableNos: number[], partySize: number }
- */
+export const runtime = "nodejs";
 export async function POST(
   req: Request,
   ctx: { params: Promise<{ id: string }> }

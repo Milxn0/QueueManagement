@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { serverSupabase } from "@/app/api/_helpers/supabaseServer";
 import { getAutofillProfile } from "@/server/controllers/usersController";
-
+export const runtime = "nodejs";
 export async function GET() {
   try {
     const sb = await serverSupabase();
