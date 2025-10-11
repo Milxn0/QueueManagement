@@ -46,10 +46,13 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(_req: Request, ctx: { params: { id: string } }) {
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const supabase = createServiceClient();
-    const { id } = ctx.params;
+    const { id } = await params;
     if (!id)
       return NextResponse.json(
         { error: "missing reservation id" },
