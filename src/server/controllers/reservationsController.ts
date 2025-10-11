@@ -128,12 +128,19 @@ export async function getOccupiedAround(
 
   const uniq = new Map<number, any>();
   for (const row of data ?? []) {
-    const name: string = row?.tables?.table_name ?? "";
-    const m = String(name).match(/\d+/);
+    // รองรับ tables เป็น object หรือ array
+    const name: string = Array.isArray((row as any)?.tables)
+      ? (row as any).tables?.[0]?.table_name ?? ""
+      : (row as any)?.tables?.table_name ?? "";
+
     const tableNo = Number(String(name).match(/\d+/)?.[0] ?? NaN);
     if (!Number.isFinite(tableNo)) continue;
 
-    const otherISO = row?.reservations?.reservation_datetime;
+    const rsv = Array.isArray((row as any)?.reservations)
+      ? (row as any).reservations?.[0]
+      : (row as any).reservations;
+
+    const otherISO: string | null = rsv?.reservation_datetime ?? null;
     const other = otherISO ? new Date(otherISO) : null;
     if (!other || Number.isNaN(other.getTime())) continue;
 
@@ -146,8 +153,8 @@ export async function getOccupiedAround(
     if (!uniq.has(tableNo)) {
       uniq.set(tableNo, {
         tableNo,
-        reservationId: row?.reservations?.id ?? null,
-        queue_code: row?.reservations?.queue_code ?? null,
+        reservationId: rsv?.id ?? null,
+        queue_code: rsv?.queue_code ?? null,
         reservation_datetime: otherISO ?? null,
       });
     }
