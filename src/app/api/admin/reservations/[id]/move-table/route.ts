@@ -3,11 +3,15 @@
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
 import { tableNameFromNo } from "@/utils/tables";
+export const runtime = "nodejs";
 
-export async function PATCH(req: Request, ctx: { params: { id: string } }) {
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const supabase = createServiceClient();
-    const { id } = ctx.params;
+    const { id } = await params;
     const body = await req.json().catch(() => ({}));
     const toNo = Number(body?.toNo);
 
