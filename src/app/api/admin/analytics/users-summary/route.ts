@@ -1,14 +1,17 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabaseClient";
+import { createServiceClient } from "@/lib/supabaseService";
+
+export const runtime = "nodejs";
 
 export async function GET() {
-  const supabase = createClient();
+  const supabase = createServiceClient();
 
   const { data, error } = await supabase.from("users").select("role");
 
-  if (error)
+  if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
 
   const totals = { all: 0, customer: 0, staff: 0, admin: 0 };
   for (const r of data ?? []) {
