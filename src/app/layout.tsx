@@ -12,9 +12,6 @@ const prompt = Prompt({
 export const metadata = {
   title: "Seoul Korean BBQ Reservation",
   description: "Reservation website",
-  icons: {
-    icon: "/favicon.ico",
-  },
 };
 
 export default function RootLayout({

@@ -146,6 +146,7 @@ export default function UserDetailModal({
         const res = await fetch("/api/admin/users/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "include",
           body: JSON.stringify({ id: user.id, payload }),
         });
         const json = await res.json();
@@ -214,6 +215,7 @@ export default function UserDetailModal({
       const res = await fetch("/api/admin/users/delete", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ id: user.id }),
       });
       const json = await res.json();

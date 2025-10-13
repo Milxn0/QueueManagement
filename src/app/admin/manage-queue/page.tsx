@@ -74,6 +74,13 @@ export default function ManageQueuesPage() {
   const [search, setSearch] = useState("");
   const norm = (v: unknown) => (v == null ? "" : String(v)).toLowerCase();
 
+  // --- normalize user field from either `users` or `user`
+  const pickUser = (r: any) => r?.users ?? r?.user ?? null;
+  const normalizeRowsUser = <T extends Record<string, any>>(arr: T[]) =>
+    (Array.isArray(arr) ? arr : []).map((r) =>
+      r?.users ? r : { ...r, users: pickUser(r) }
+    );
+
   // ---------- Reservations ----------
   const [filter, setFilter] = useState<FilterKey>("all");
   const [rows, setRows] = useState<ReservationRow[]>([]);
@@ -100,32 +107,208 @@ export default function ManageQueuesPage() {
       end = endOfYearISO;
     }
 
-    const qs = new URLSearchParams();
-    if (start) qs.set("start", start);
-    if (end) qs.set("end", end);
-    if (filter === "cancelled") qs.set("status", "cancelled");
+    // helper: แปลง response เป็นอาร์เรย์เสมอ
+    const normalize = (json: any) =>
+      (Array.isArray(json) && json) ||
+      (Array.isArray(json?.data) && json.data) ||
+      (Array.isArray(json?.rows) && json.rows) ||
+      (Array.isArray(json?.items) && json.items) ||
+      (Array.isArray(json?.result) && json.result) ||
+      (Array.isArray(json?.reservations) && json.reservations) ||
+      [];
 
-    const res = await fetch(`/api/admin/reservations?` + qs.toString(), {
-      cache: "no-store",
-    });
-    const data = await res.json();
+    // helper: call API ตามพารามิเตอร์
+    const call = async (params: Record<string, string | undefined>) => {
+      const qs = new URLSearchParams();
+      if (start) qs.set("start", start);
+      if (end) qs.set("end", end);
+      if (params.status) qs.set("status", params.status);
+      if (params.statuses) qs.set("statuses", params.statuses);
+      if (params.include_cancelled)
+        qs.set("include_cancelled", params.include_cancelled);
+      if (params.all) qs.set("all", params.all);
 
-    setRows(data);
-    setRowsLoading(false);
-  }, [filter, selectedMonth, startEnd, monthRange]);
+      const res = await fetch(`/api/admin/reservations?` + qs.toString(), {
+        cache: "no-store",
+      });
+      const json = await res.json();
+      return normalize(json) as ReservationRow[];
+    };
 
-  // Derived rows after client-side search
-  const displayRows = useMemo(() => {
+    // ฟังก์ชันตรวจว่าเป็น “มีแต่ waiting” หรือไม่
+    const allWaiting = (arr: ReservationRow[]) =>
+      arr.length > 0 &&
+      arr.every((r) => String(r?.status ?? "").toLowerCase() === "waiting");
+
+    // Fallback: ดึงตรงจาก Supabase ให้ “ทุกสถานะ” และ include ความสัมพันธ์ที่ UI ใช้
+    const supaAll = async (): Promise<ReservationRow[]> => {
+      try {
+        // 1) พยายาม select พร้อมความสัมพันธ์ก่อน
+        let q = supabase
+          .from("reservations")
+          .select(
+            `
+          id,
+          queue_code,
+          reservation_datetime,
+          partysize,
+          status,
+          user_id,
+          table_id,
+          users:users(name,phone,email),
+          tbl:tables(table_name)
+        `
+          )
+          .order("reservation_datetime", { ascending: false })
+          .limit(200);
+
+        if (start) q = q.gte("reservation_datetime", start);
+        if (end) q = q.lte("reservation_datetime", end);
+
+        const { data, error } = await q;
+
+        if (!error && Array.isArray(data)) {
+          return data as unknown as ReservationRow[];
+        }
+
+        console.warn(
+          "relation select failed, fallback base columns:",
+          (error as any)?.message || error
+        );
+
+        // 2) Fallback: ดึงเฉพาะคอลัมน์ฐานก่อน
+        let q2 = supabase
+          .from("reservations")
+          .select(
+            `
+          id,
+          queue_code,
+          reservation_datetime,
+          partysize,
+          status,
+          user_id,
+          table_id
+        `
+          )
+          .order("reservation_datetime", { ascending: false })
+          .limit(200);
+
+        if (start) q2 = q2.gte("reservation_datetime", start);
+        if (end) q2 = q2.lte("reservation_datetime", end);
+
+        const { data: base, error: error2 } = await q2;
+        if (error2) {
+          console.error(
+            "supabase fallback (base) error:",
+            (error2 as any)?.message || error2
+          );
+          return [];
+        }
+
+        const baseRows = Array.isArray(base) ? base : [];
+
+        // 3) เติมชื่อผู้จอง: ดึง users แบบ batch แล้ว map กลับเข้าไปเป็นฟิลด์ nested `users`
+        const userIds = Array.from(
+          new Set(
+            baseRows
+              .map((r: any) => r?.user_id)
+              .filter((v: unknown): v is string => typeof v === "string" && !!v)
+          )
+        );
+
+        let usersMap = new Map<
+          string,
+          { name: string | null; phone: string | null; email: string | null }
+        >();
+        if (userIds.length > 0) {
+          const { data: urows, error: uerr } = await supabase
+            .from("users")
+            .select("id,name,phone,email")
+            .in("id", userIds);
+
+          if (uerr) {
+            console.warn(
+              "fetch users for fallback failed:",
+              (uerr as any)?.message || uerr
+            );
+          } else if (Array.isArray(urows)) {
+            usersMap = new Map(
+              urows.map((u: any) => [
+                u.id as string,
+                {
+                  name: u.name ?? null,
+                  phone: u.phone ?? null,
+                  email: u.email ?? null,
+                },
+              ])
+            );
+          }
+        }
+
+        const merged: ReservationRow[] = baseRows.map((r: any) => ({
+          ...r,
+          users: usersMap.get(r.user_id ?? "") ?? null, // ให้ UI ใช้ r.users?.name ได้เหมือนเดิม
+        }));
+
+        return merged;
+      } catch (e: any) {
+        console.error("supabase fallback exception:", e?.message || e);
+        return [];
+      }
+    };
+
+    try {
+      // 1) พยายามขอ “ทุกสถานะ” จาก API ในครั้งเดียวก่อน
+      const list1 = await call({
+        statuses: "waiting,confirmed,seated,paid,cancelled",
+        include_cancelled: "1",
+        all: "1",
+      });
+
+      if (list1.length > 0 && !allWaiting(list1)) {
+        setRows(normalizeRowsUser(list1).slice(0, 200));
+        return;
+      }
+
+      // 2) แผนสำรองรอบแรก: รวมผลหลายคำขอทีละสถานะ (กรณี API รองรับ status แยก)
+      const statuses = ["waiting", "confirmed", "seated", "paid", "cancelled"];
+      const lists = await Promise.all(statuses.map((s) => call({ status: s })));
+
+      const map = new Map<string, ReservationRow>();
+      for (const list of lists) {
+        for (const r of list) {
+          if (r?.id && !map.has(r.id)) map.set(r.id, r);
+        }
+      }
+      const merged = Array.from(map.values());
+
+      if (merged.length > 0 && !allWaiting(merged)) {
+        setRows(normalizeRowsUser(merged).slice(0, 200));
+        return;
+      }
+
+      // 3) แผนสำรองสุดท้าย: ดึงตรงจาก Supabase (ได้ทุกสถานะจริง ๆ)
+      const supa = await supaAll();
+      setRows(normalizeRowsUser(supa).slice(0, 200));
+    } catch (err) {
+      console.error("fetchReservations error:", err);
+      // 4) ถ้า API พัง ให้ fallback Supabase ทันที
+      const supa = await supaAll();
+      setRows(normalizeRowsUser(supa).slice(0, 200));
+    } finally {
+      setRowsLoading(false);
+    }
+  }, [filter, selectedMonth, startEnd, monthRange, supabase]);
+
+  const displayRows = useMemo<ReservationRow[]>(() => {
+    const base = Array.isArray(rows) ? rows : [];
     const term = norm(search);
-    if (!term) return rows;
-    return rows.filter((r) => {
-      const values = [
-        r.queue_code,
-        r.users?.name,
-        r.users?.phone,
-        r.users?.email,
-        r.status,
-      ].map(norm);
+    if (!term) return base;
+    return base.filter((r) => {
+      const u = pickUser(r);
+      const values = [r.queue_code, u?.name, u?.phone, u?.email, r.status].map(
+        norm
+      );
       return values.some((v) => v.includes(term));
     });
   }, [rows, search]);
@@ -168,6 +351,7 @@ export default function ManageQueuesPage() {
   useEffect(() => {
     fetchReservations();
   }, [filter, selectedMonth, fetchReservations]);
+
   const confirmReservation = useCallback(
     async (id: string) => {
       await fetch(`/api/admin/reservations/${id}/confirm`, { method: "PATCH" });
@@ -207,7 +391,7 @@ export default function ManageQueuesPage() {
     );
     const list = await res.json();
 
-    const occ = (list ?? [])
+    const occ = (Array.isArray(list) ? list : [])
       .map(
         (o: {
           tbl?: { table_name?: string | null };
@@ -223,8 +407,10 @@ export default function ManageQueuesPage() {
 
     setOccupied(occ);
   }, []);
+
   const sortedRows = useMemo(() => {
-    const rows = [...displayRows];
+    const base = Array.isArray(displayRows) ? displayRows : [];
+    const rows = [...base];
 
     const toTime = (iso?: string | null) => {
       const d = iso ? new Date(iso) : null;
@@ -248,9 +434,13 @@ export default function ManageQueuesPage() {
         case "code-desc":
           return safeStr(b.queue_code).localeCompare(safeStr(a.queue_code));
         case "name-asc":
-          return safeStr(a.user?.name).localeCompare(safeStr(b.user?.name));
+          return safeStr(pickUser(a)?.name).localeCompare(
+            safeStr(pickUser(b)?.name)
+          );
         case "name-desc":
-          return safeStr(b.user?.name).localeCompare(safeStr(a.user?.name));
+          return safeStr(pickUser(b)?.name).localeCompare(
+            safeStr(pickUser(a)?.name)
+          );
         case "seats-asc":
           return safeNum(a.partysize) - safeNum(b.partysize);
         case "seats-desc":
@@ -262,6 +452,7 @@ export default function ManageQueuesPage() {
 
     return rows;
   }, [displayRows, sortBy]);
+
   // ---------- UI ----------
   if (loading) {
     return (
@@ -381,7 +572,8 @@ export default function ManageQueuesPage() {
                 className="flex-1 min-w-[220px] md:min-w-[320px] max-w-xl rounded-xl border px-3 py-1.5 text-sm"
               />
               <div className="text-sm text-gray-500">
-                แสดง {displayRows.length} รายการ (ล่าสุด 200 แถว)
+                แสดง {Array.isArray(displayRows) ? displayRows.length : 0} รายการ
+                (ล่าสุด 200 แถว)
               </div>
             </div>
           </div>

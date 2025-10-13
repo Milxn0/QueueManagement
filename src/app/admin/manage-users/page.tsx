@@ -48,7 +48,14 @@ export default function ManageUsersPage() {
   const [addOpen, setAddOpen] = useState(false);
   // ---------------- data ----------------
   const fetchUsers = useCallback(async () => {
-    const res = await fetch("/api/admin/users", { cache: "no-store" });
+    const res = await fetch("/api/admin/users", {
+      cache: "no-store",
+      credentials: "include",
+    });
+    if (!res.ok) {
+      const err = await res.text().catch(() => "");
+      throw new Error(err || `HTTP ${res.status}`);
+    }
     const data = await res.json();
     setUsers(data);
     setLoading(false);
@@ -359,7 +366,7 @@ export default function ManageUsersPage() {
                           setMsg(null);
                           setError(null);
                         }}
-                         className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 whitespace-nowrap"
+                        className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 whitespace-nowrap"
                       >
                         <FontAwesomeIcon icon={faEye} />
                         ดูรายละเอียด

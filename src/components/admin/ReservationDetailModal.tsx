@@ -88,7 +88,26 @@ const showOccCode = (o?: {
   const rid = (o?.reservationId ?? "").trim();
   return rid ? rid.slice(0, 6) : "-";
 };
+const pickUserObj = (r: any) => r?.users ?? r?.user ?? null;
 
+const fallbackName = (r: any) =>
+  pickUserObj(r)?.name ??
+  r?.name ??
+  r?.customer_name ??
+  r?.contact_name ??
+  r?.fullname ??
+  r?.full_name ??
+  r?.booker_name ??
+  r?.guest_name ??
+  null;
+
+const fallbackPhone = (r: any) =>
+  pickUserObj(r)?.phone ??
+  r?.phone ??
+  r?.tel ??
+  r?.mobile ??
+  r?.contact_phone ??
+  null;
 /* ---------- Component ---------- */
 export default function ReservationDetailModal({
   open,
@@ -104,39 +123,93 @@ export default function ReservationDetailModal({
   fromManageQueue = false,
   onUpdated,
 }: Props) {
+  const [cancelledAt, setCancelledAt] = useState<string | null>(null);
+  const [cancelledReason, setCancelledReason] = useState<string | null>(null);
   const supabase = useMemo(() => createClient(), []);
-
+  const [cancelledBy, setCancelledBy] = useState<{
+    name: string | null;
+    role: string | null;
+  } | null>(null);
   async function refreshRow() {
     if (!row?.id) return;
+
     const { data, error } = await supabase
       .from("reservations")
       .select(
         `
-        id, reservation_datetime, status, partysize, comment, cancelled_at,
-        cancelled_reason, cancelled_by_user_id,
-        user:user_id(id, name, phone)
-      `
+    id, queue_code, reservation_datetime, status, partysize, comment,
+    user_id,
+    cancelled_at, cancelled_reason, cancelled_by_user_id
+  `
       )
       .eq("id", row.id)
-      .single();
+      .maybeSingle();
 
     if (error) {
-      console.error(error);
+      console.error("refreshRow/select reservations error", {
+        message: error.message,
+        details: (error as any)?.details,
+        hint: (error as any)?.hint,
+        code: (error as any)?.code,
+      });
       return;
     }
-    setLocalStatus((data?.status ?? "").toLowerCase());
+    if (!data) return;
+
+    setLocalStatus(String(data?.status ?? "").toLowerCase());
     setDisplayDatetime(data?.reservation_datetime ?? null);
     setDisplayPartysize(data?.partysize ?? null);
     setDisplayComment(data?.comment ?? null);
-    setDisplayphone(
-      (data as any)?.user?.phone ??
-        (row as any)?.user?.phone ??
-        (row as any)?.user?.phone ??
-        null
-    );
+    setCancelledAt(data?.cancelled_at ?? null);
+    setCancelledReason(data?.cancelled_reason ?? null);
+
+    let phone: string | null =
+      (row as any)?.users?.phone ?? (row as any)?.phone ?? null;
+
+    if (!phone && data?.user_id) {
+      const { data: u } = await supabase
+        .from("users")
+        .select("phone")
+        .eq("id", data.user_id)
+        .maybeSingle();
+      phone = u?.phone ?? phone ?? null;
+    }
+    setDisplayphone(phone);
+    // --- ถ้า join ไม่ได้ แต่มี cancelled_by_user_id (และไม่ใช่ระบบ) ให้ดึงแยก ---
+    let cancelledByLocal: { name: string | null; role: string | null } | null =
+      null;
+
+    if (data?.cancelled_by && (data.cancelled_by as any).id) {
+      cancelledByLocal = {
+        name: (data.cancelled_by as any).name ?? null,
+        role: (data.cancelled_by as any).role ?? null,
+      };
+    } else if (
+      data?.cancelled_by_user_id &&
+      data.cancelled_by_user_id !== "00000000-0000-0000-0000-000000000001"
+    ) {
+      const { data: u } = await supabase
+        .from("users")
+        .select("id, name, role")
+        .eq("id", data.cancelled_by_user_id)
+        .maybeSingle();
+      if (u) {
+        cancelledByLocal = { name: u.name ?? null, role: u.role ?? null };
+      }
+    }
+
+    setCancelledBy(cancelledByLocal);
+
     await loadAssignedTables();
   }
-
+  const fmtTH = (iso: string | null) =>
+    !iso
+      ? null
+      : new Date(iso).toLocaleString("th-TH", {
+          timeZone: "Asia/Bangkok",
+          dateStyle: "medium",
+          timeStyle: "short",
+        });
   const [assignedTables, setAssignedTables] = useState<
     { id: string; name: string; no: number | null }[]
   >([]);
@@ -336,7 +409,7 @@ export default function ReservationDetailModal({
     row?.comment ?? null
   );
   const [displayPhone, setDisplayphone] = useState<string | null>(
-    (row as any)?.user?.phone ?? (row as any)?.phone ?? null
+    fallbackPhone(row)
   );
   const requiredSeats = Number(displayPartysize ?? 0) || 0;
   const need = Math.max(0, requiredSeats - allowedSum);
@@ -458,10 +531,28 @@ export default function ReservationDetailModal({
   }, [appSettings?.days_ahead, appSettings?.close_time]);
 
   function parseHHMM(s?: string | null) {
-  const [h, m] = String(s ?? "").split(":").map((x) => Number(x));
-  return { H: Number.isFinite(h) ? h : 0, M: Number.isFinite(m) ? m : 0 };
-}
+    const [h, m] = String(s ?? "")
+      .split(":")
+      .map((x) => Number(x));
+    return { H: Number.isFinite(h) ? h : 0, M: Number.isFinite(m) ? m : 0 };
+  }
+  function isWithinOpenClose(
+    d: Date,
+    open?: string | null,
+    close?: string | null
+  ) {
+    const { H: oH, M: oM } = parseHHMM(open ?? "09:00");
+    const { H: cH, M: cM } = parseHHMM(close ?? "21:00");
 
+    const mins = d.getHours() * 60 + d.getMinutes();
+    const openM = oH * 60 + oM;
+    const closeM = cH * 60 + cM;
+
+    if (closeM >= openM) {
+      return mins >= openM && mins <= closeM;
+    }
+    return mins >= openM || mins <= closeM;
+  }
   useEffect(() => {
     (async () => {
       try {
@@ -489,7 +580,7 @@ export default function ReservationDetailModal({
     setDisplayDatetime(row?.reservation_datetime ?? null);
     setDisplayPartysize(row?.partysize ?? null);
     setDisplayComment(row?.comment ?? null);
-    setDisplayphone((row as any)?.user?.phone ?? (row as any)?.phone ?? null);
+    setDisplayphone(fallbackPhone(row));
     const d = parseDate(row?.reservation_datetime ?? null);
     setEditDate(d ? toInputLocal(d) : "");
     setEditSize(
@@ -497,6 +588,8 @@ export default function ReservationDetailModal({
         ? ""
         : String(row.partysize)
     );
+    setCancelledAt(row?.cancelled_at ?? null);
+    setCancelledReason(row?.cancelled_reason ?? null);
     setEditComment(row?.comment ?? "");
     setCancelStep(0);
     setTableStep(0);
@@ -506,6 +599,10 @@ export default function ReservationDetailModal({
     setShowPayment(false);
     setOptimisticTableNo(currentTableNo ?? null);
     loadAssignedTables();
+
+    if (open && row?.id) {
+      void refreshRow();
+    }
   }, [row?.id, open, currentTableNo]);
 
   // ดึงบิลเฉพาะตอน paid
@@ -599,9 +696,28 @@ export default function ReservationDetailModal({
     if (busy) return;
     try {
       setBusy(true);
+
       const payload: Record<string, unknown> = {};
-      if (editDate)
-        payload.reservation_datetime = new Date(editDate).toISOString();
+
+      if (editDate) {
+        const newDt = new Date(editDate);
+        const okRange = isWithinOpenClose(
+          newDt,
+          appSettings?.open_time,
+          appSettings?.close_time
+        );
+        if (!okRange) {
+          showError(
+            `กรุณาเลือกเวลาในกรอบที่กำหนด ${
+              appSettings?.open_time ?? "09:00"
+            } - ${appSettings?.close_time ?? "21:00"}`
+          );
+          setBusy(false);
+          return;
+        }
+        payload.reservation_datetime = newDt.toISOString();
+      }
+
       if (editSize !== "") {
         const n = Number(editSize);
         payload.partysize = Number.isFinite(n) ? n : null;
@@ -612,6 +728,7 @@ export default function ReservationDetailModal({
         setEditStep(0);
         return;
       }
+
       const { error } = await supabase
         .from("reservations")
         .update(payload)
@@ -627,11 +744,11 @@ export default function ReservationDetailModal({
         setDisplayPartysize(payload.partysize as number | null);
       if ("comment" in payload)
         setDisplayComment((payload.comment as string | null) ?? null);
+
       setEditStep(0);
       setOk("แก้ไขสำเร็จ");
-      await loadAssignedTables(); // เผื่อแก้เวลาแล้วมีผลกับแสดงผล
+      await loadAssignedTables();
       onUpdated?.();
-
       setTimeout(() => setOk(null), 1600);
     } finally {
       setBusy(false);
@@ -750,7 +867,7 @@ export default function ReservationDetailModal({
                 รายละเอียดคิว
               </div>
               <h3 className="mt-2 text-lg font-semibold">
-                {row.user?.name ?? "—"}
+                {fallbackName(row) ?? "—"}
               </h3>
               <div className="mt-1 text-xs opacity-90">
                 รหัสคิว{" "}
@@ -1060,9 +1177,9 @@ export default function ReservationDetailModal({
                       {row.cancelled_by_user_id ===
                       "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
-                        : (row as any).cancelled_by?.role
-                        ? (row as any).cancelled_by.role
-                        : "—"}
+                        : cancelledBy?.role ??
+                          (row as any).cancelled_by?.role ??
+                          "—"}
                     </span>
                   </div>
 
@@ -1072,22 +1189,20 @@ export default function ReservationDetailModal({
                       {row.cancelled_by_user_id ===
                       "00000000-0000-0000-0000-000000000001"
                         ? "ระบบอัตโนมัติ"
-                        : (row as any).cancelled_by?.name?.trim() || "—"}
+                        : cancelledBy?.name ||
+                          (row as any).cancelled_by?.name ||
+                          "—"}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-red-700">สาเหตุ:</span>{" "}
-                    <span className="break-words whitespace-pre-line font-medium">
-                      {row.cancelled_reason?.trim() || "—"}
-                    </span>
+                    <span className="text-red-700">สาเหตุ: </span>
+                    <span className="font-medium">{cancelledReason ?? "—"}</span>
                   </div>
 
                   <div>
-                    <span className="text-red-700">ยกเลิกเมื่อ:</span>{" "}
-                    <span className="font-medium">
-                      {formatDisplayDate(row.cancelled_at ?? null)}
-                    </span>
+                    <span className="text-red-700">ยกเลิกเมื่อ: </span>
+                    <span className="font-medium">{fmtTH(cancelledAt) ?? "—"}</span>
                   </div>
                 </div>
               </div>
@@ -1609,7 +1724,7 @@ export default function ReservationDetailModal({
                     </span>
                   </div>
                   <div className="text-[12px] text-rose-700/70">
-                    ชื่อ: {row.user?.name ?? "—"}
+                    ชื่อ: {fallbackName(row) ?? "—"}
                   </div>
                 </div>
 

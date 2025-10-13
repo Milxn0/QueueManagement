@@ -44,13 +44,17 @@ export default function TodayQueuePage() {
   // ---------- Reservations (วันนี้เท่านั้น) ----------
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
+  const [waitingAllRows, setWaitingAllRows] = useState<ReservationRow[]>([]);
   const sp = useSearchParams();
 
   const router = useRouter();
   const pathname = usePathname();
   const rawParam = sp?.get?.("status") ?? "";
   const statusParam = (sp?.get?.("status") as StatusKey | "") || "";
-  const filteredRows = filterByStatus(rows, statusParam);
+  const filteredRows =
+    statusParam === "waiting"
+      ? filterByStatus(waitingAllRows, "waiting")
+      : filterByStatus(rows, statusParam);
 
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
@@ -66,23 +70,65 @@ export default function TodayQueuePage() {
         payload = null;
       }
 
-      const rows: any[] = Array.isArray(payload)
+      const todayRows: any[] = Array.isArray(payload)
         ? payload
         : Array.isArray(payload?.data)
         ? payload.data
         : [];
 
-      setRows(rows);
+      setRows(todayRows);
+      let waitingAll: any[] | null = null;
+      try {
+        const api = await fetch("/api/admin/reservations/waiting-all", {
+          cache: "no-store",
+          credentials: "include",
+        });
+        if (api.ok) {
+          const body = await api.json();
+          waitingAll = Array.isArray(body)
+            ? body
+            : Array.isArray(body?.data)
+            ? body.data
+            : [];
+        } else {
+          const errBody = await api.json().catch(() => ({}));
+          console.error(
+            "waiting-all API error",
+            api.status,
+            errBody?.error || errBody
+          );
+        }
+      } catch (e) {
+        console.error("waiting-all API fetch failed", e);
+        waitingAll = null;
+      }
 
+      // fallback ถ้า API ใช้ไม่ได้จริง ๆ (อาจติด RLS)
+      if (!waitingAll) {
+        const { data: wRows, error: wErr } = await supabase
+          .from("reservations")
+          .select(
+            "id,user_id,reservation_datetime,queue_code,status,created_at,partysize,customer_name"
+          )
+          .or("status.eq.waiting,status.eq.WAITING,status.ilike.waiting%")
+          .order("reservation_datetime", { ascending: true })
+          .order("created_at", { ascending: true });
+        if (wErr) console.error("Supabase fallback error:", wErr.message);
+        waitingAll = wErr ? [] : (wRows as any[]) ?? [];
+      }
+
+      setWaitingAllRows(waitingAll);
+
+      // ---------- รวมสรุป ----------
       const tally = {
-        all: rows.length || 0,
-        waiting: 0,
+        all: todayRows.length || 0,
+        waiting: waitingAll?.length ?? 0, // ทั้งระบบ
         confirmed: 0,
         seated: 0,
         paid: 0,
         cancelled: 0,
       };
-      for (const r of rows) {
+      for (const r of todayRows) {
         const k = normalizeStatus?.(r?.status) ?? "";
         if (k && k in tally) {
           // @ts-expect-error index by key
@@ -93,7 +139,7 @@ export default function TodayQueuePage() {
     } finally {
       setRowsLoading(false);
     }
-  }, []);
+  }, [supabase]);
 
   const setStatusParam = (key: StatusKey | "") => {
     const params = new URLSearchParams(sp?.toString?.() ?? "");
@@ -221,7 +267,8 @@ export default function TodayQueuePage() {
     return row.filter((r) => normalize(r.status) === k);
   }
   const shownCount = filteredRows.length;
-
+  const totalCount =
+    statusParam === "waiting" ? waitingAllRows.length : rows.length;
   const [totals, setTotals] = useState<Totals>({
     all: 0,
     waiting: 0,
@@ -243,14 +290,14 @@ export default function TodayQueuePage() {
       {
         label: "Waiting",
         value: totals.waiting,
-        subtext: "กำลังรอ",
+        subtext: "คิวที่กำลังรอทั้งหมด",
         className: "border-amber-200 text-amber-700",
         key: "waiting" as const,
       },
       {
         label: "Confirmed",
         value: totals.confirmed,
-        subtext: "ยืนยันแล้ว",
+        subtext: "คิววันนี้ที่ยืนยันแล้ว",
         className: "border-indigo-200 text-indigo-700",
         key: "confirmed" as const,
       },
@@ -354,7 +401,7 @@ export default function TodayQueuePage() {
                   {shownCount}
                 </span>{" "}
                 รายการ
-                <span className="text-gray-400"> / ทั้งหมด {rows.length}</span>
+                <span className="text-gray-400"> / ทั้งหมด {totalCount}</span>
               </div>
             </div>
           </div>
@@ -364,7 +411,7 @@ export default function TodayQueuePage() {
               <thead className="bg-gray-50/90 text-gray-600 sticky top-0 z-10 backdrop-blur supports-[backdrop-filter]:bg-gray-50/70">
                 <tr>
                   <th className="px-4 py-3 text-left">คิว</th>
-                  <th className="px-4 py-3 text-left">ลูกค้า</th>
+                  <th className="px-4 py-3 text-left">ชื่อลูกค้า</th>
                   <th className="px-4 py-3 text-left">วัน-เวลา</th>
                   <th className="px-4 py-3 text-left">จำนวน</th>
                   <th className="px-4 py-3 text-left">สถานะ</th>

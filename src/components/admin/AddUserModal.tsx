@@ -76,6 +76,7 @@ export default function AddUserModal({
       const res = await fetch("/api/admin/users/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({
           name: form.name.trim(),
           email: form.email.trim(),

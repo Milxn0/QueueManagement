@@ -8,16 +8,44 @@ import { usePathname, useRouter } from "next/navigation";
 import { createPortal } from "react-dom";
 import { useAuth } from "@/hooks/useAuth";
 import UserMenu from "@/components/user/UserMenu";
+import { createClient } from "@/lib/supabaseClient";
 
 export default function Navbar() {
   const pathname = usePathname();
   const router = useRouter();
   const { user } = useAuth();
+  const [storeName, setStoreName] = useState<string>("");
+  const [storeImageUrl, setStoreImageUrl] = useState<string>("");
 
   const [menuOpen, setMenuOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      try {
+        const supabase = createClient();
+
+        const { data, error } = await supabase
+          .from("app_settings")
+          .select("store_name, store_image_url")
+          .eq("id", 1)
+          .maybeSingle();
+
+        if (!alive) return;
+        if (!error && data) {
+          setStoreName(String(data.store_name ?? ""));
+          setStoreImageUrl(String(data.store_image_url ?? ""));
+        }
+      } catch {
+        /* เงียบไว้ */
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
   const email = user?.email ?? null;
 
   const NavLink = ({
@@ -49,23 +77,20 @@ export default function Navbar() {
       <div className="w-full px-3 sm:px-4 md:px-6 lg:px-10 xl:px-12 h-14 flex items-center justify-between">
         <div className="flex items-center gap-6">
           <Link href="/" className="flex items-center gap-2">
-            <AppSettingText
-              keyName="store_image_url"
-              format={(v) => (
-                <img
-                  src={v && String(v).trim() ? String(v) : "/logo.jpg"}
-                  alt="logo"
-                  className="h-7 w-7 rounded object-cover"
-                  loading="lazy"
-                  onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "/logo.jpg";
-                  }}
-                />
-              )}
+            <img
+              src={
+                storeImageUrl && storeImageUrl.trim()
+                  ? storeImageUrl
+                  : "/logo.jpg"
+              }
+              alt="logo"
+              className="h-7 w-7 rounded object-cover"
+              loading="lazy"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).src = "/logo.jpg";
+              }}
             />
-            <span className="font-semibold">
-              <AppSettingText keyName="store_name" />
-            </span>
+            <span className="font-semibold" >{storeName}</span>
           </Link>
 
           <div className="hidden md:flex items-center gap-1">

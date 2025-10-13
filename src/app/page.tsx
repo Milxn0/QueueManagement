@@ -56,7 +56,7 @@ export default function HomePage() {
             )
             .eq("user_id", uid)
             .in("status", ["waiting", "confirmed"])
-            .gte("reservation_datetime", graceIso) 
+            .gte("reservation_datetime", graceIso)
             .order("reservation_datetime", { ascending: true })
             .order("created_at", { ascending: true });
 
@@ -203,38 +203,69 @@ export default function HomePage() {
                         </p>
                       </div>
                       <div>
-                        {(r.status ?? "").toLowerCase() === "waiting" ? (
-                          <p className="text-lg font-semibold text-amber-600">
-                            รอพนักงานคอนเฟิร์ม
-                          </p>
-                        ) : typeof idx === "number" && idx === 0 ? (
-                          <div>
-                            <p className="text-lg font-semibold text-emerald-600">
-                              คิวปัจจุบันคือคิวของคุณ
-                            </p>
-                            <p className="text-xs text-amber-600 mt-1">
-                              กรุณารายงานตัวกับพนักงานภายใน 10 นาที
-                            </p>
-                          </div>
-                        ) : typeof idx === "number" ? (
-                          <>
-                            <p className="text-sm text-gray-500">
-                              ถึงคิวในอีก
-                            </p>
-                            <p className="text-lg font-semibold text-emerald-600">
-                              {idx} คิว
-                            </p>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-sm text-gray-500">
-                              ถึงคิวในอีก
-                            </p>
-                            <p className="text-lg font-semibold text-emerald-600">
-                              -
-                            </p>
-                          </>
-                        )}
+                        {(() => {
+                          const status = (r.status ?? "").toLowerCase();
+                          const isFirst = typeof idx === "number" && idx === 0;
+
+                          if (status === "waiting") {
+                            return (
+                              <p className="text-lg font-semibold text-amber-600">
+                                รอพนักงานคอนเฟิร์ม
+                              </p>
+                            );
+                          }
+
+                          if (status === "confirmed" && isFirst) {
+                            const msUntil =
+                              new Date(r.reservation_datetime).getTime() -
+                              Date.now();
+                            const within10m = msUntil <= 10 * 60 * 1000;
+
+                            return within10m ? (
+                              <div>
+                                <p className="text-lg font-semibold text-emerald-600">
+                                  คิวปัจจุบันคือคิวของคุณ
+                                </p>
+                                <p className="text-xs text-amber-600 mt-1">
+                                  กรุณารายงานตัวกับพนักงานภายใน 10 นาที
+                                </p>
+                              </div>
+                            ) : (
+                              <div>
+                                <p className="text-lg font-semibold text-indigo-600">
+                                  พนักงานได้ยืนยันคิวแล้ว
+                                </p>
+                                <p className="text-xs text-amber-600 mt-1">
+                                  กรุณารอจนกว่าจะถึงเวลาที่ได้ทำการจองไว้
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          if (typeof idx === "number") {
+                            return (
+                              <>
+                                <p className="text-sm text-gray-500">
+                                  ถึงคิวในอีก
+                                </p>
+                                <p className="text-lg font-semibold text-emerald-600">
+                                  {idx} คิว
+                                </p>
+                              </>
+                            );
+                          }
+
+                          return (
+                            <>
+                              <p className="text-sm text-gray-500">
+                                ถึงคิวในอีก
+                              </p>
+                              <p className="text-lg font-semibold text-emerald-600">
+                                -
+                              </p>
+                            </>
+                          );
+                        })()}
                       </div>
                     </li>
                   );

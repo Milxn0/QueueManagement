@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 import React from "react";
 import { statusClass, statusLabel } from "@/utils/status";
@@ -89,11 +90,16 @@ export default function ManageQueueTable({
                     <td className="px-5 py-4 font-semibold text-indigo-700">
                       {r.queue_code ?? "-"}
                     </td>
-                    <td className="px-5 py-4 text-gray-800">
-                      {r.user?.name
-                        ? (r.user?.name as string).slice(0, 24)
-                        : "-"}
-                    </td>
+                    {(() => {
+                      const userName =
+                        (r as any)?.users?.name ?? r.user?.name ?? null;
+
+                      return (
+                        <td className="px-5 py-4 text-gray-800">
+                          {userName ? String(userName).slice(0, 24) : "-"}
+                        </td>
+                      );
+                    })()}
                     <td className="px-5 py-4 text-gray-800">
                       {formatDate(r.reservation_datetime)}
                     </td>

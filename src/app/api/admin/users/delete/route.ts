@@ -1,6 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabaseService";
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
+
 export const runtime = "nodejs";
 export async function POST(req: Request) {
   try {
@@ -10,8 +13,17 @@ export async function POST(req: Request) {
     }
 
     // 1) ตรวจสิทธิ์ผู้เรียก (ต้องเป็น admin)
-    const supabase = await createServiceClient();
-    const { data: auth } = await supabase.auth.getUser();
+    const cookieStore = await cookies();
+    const supabaseAuth = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get: (name: string) => cookieStore.get(name)?.value,
+        },
+      }
+    );
+    const { data: auth } = await supabaseAuth.auth.getUser();
     if (!auth.user) {
       return NextResponse.json({ error: "ต้องเข้าสู่ระบบ" }, { status: 401 });
     }
@@ -24,7 +36,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const { data: me, error: meErr } = await supabase
+    const { data: me, error: meErr } = await supabaseAuth
       .from("users")
       .select("role")
       .eq("id", auth.user.id)

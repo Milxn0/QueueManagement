@@ -16,7 +16,23 @@ const formatDate = (value: string | null) => {
     timeZone: "Asia/Bangkok",
   }).format(d);
 };
+const getCustomerName = (r: any): string => {
+  return (
+    r?.user?.name ?? r?.customer_name ?? r?.name ?? r?.profile?.name ?? "-"
+  );
+};
 
+const getPartySize = (r: any): string | number => {
+  const v =
+    r?.partysize ??
+    r?.party_size ??
+    r?.people ??
+    r?.people_count ??
+    r?.guests ??
+    r?.qty ??
+    null;
+  return v == null || v === "" ? "-" : v;
+};
 export default function TodayQueueTable({
   rows,
   onOpenDetail,
@@ -51,9 +67,7 @@ export default function TodayQueueTable({
           </tr>
         </tbody>
       ) : rows.length === 0 ? (
-        <tbody>
-
-        </tbody>
+        <tbody></tbody>
       ) : (
         <tbody className="divide-y divide-gray-100">
           {rows.map((r) => (
@@ -63,14 +77,14 @@ export default function TodayQueueTable({
               </td>
 
               <td className="px-5 py-4 text-gray-800">
-                {r.user?.name ? (r.user?.name as string).slice(0, 24) : "-"}
+                {String(getCustomerName(r)).slice(0, 24)}
               </td>
 
               <td className="px-5 py-4 text-gray-800">
                 {formatDate(r.reservation_datetime)}
               </td>
 
-              <td className="px-5 py-4 text-gray-800">{r.partysize ?? "-"}</td>
+              <td className="px-5 py-4 text-gray-800">{getPartySize(r)}</td>
 
               <td className="px-5 py-4">
                 <span
