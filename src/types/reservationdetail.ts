@@ -15,11 +15,12 @@ export type ReservationForDetail = {
 
 export type OccupiedItem = {
   tableNo: number;
-  reservationId: string;
-  queue_code: string | null;
-  reservation_datetime: string;
+  start?: string;
+  code?: string;
+  reservationId?: string;
+  queue_code?: string;
+  reservation_datetimets?: string;
 };
-
 export type Props = {
   open: boolean;
   row: ReservationForDetail | null;
