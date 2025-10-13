@@ -15,7 +15,7 @@ export default function LoginPage() {
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErr(null); 
+    setErr(null);
     setLoading(true);
 
     router.prefetch("/admin/dashboard");
@@ -98,9 +98,8 @@ export default function LoginPage() {
         <a href="/auth/register" className="text-indigo-600 underline">
           สมัครสมาชิก
         </a>
-        
       </p>
-       <p className="text-sm text-gray-600 mt-4">
+      <p className="text-sm text-gray-600 mt-4">
         หากลืมรหัสผ่าน{" "}
         <a href="/auth/forgot" className="text-indigo-600 underline">
           Forgot Password

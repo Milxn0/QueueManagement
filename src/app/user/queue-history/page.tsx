@@ -158,11 +158,7 @@ export default function UserReservationHistoryPage() {
         <HistoryTable rows={rows} onOpenDetail={(r) => setDetailRow(r)} />
       )}
 
-      {empty && (
-        <div className="py-16 text-center text-gray-500">
-          ยังไม่มีประวัติการจอง
-        </div>
-      )}
+     
 
       {detailRow && (
         <UserReservationDetailModal
