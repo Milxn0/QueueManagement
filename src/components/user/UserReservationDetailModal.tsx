@@ -454,7 +454,6 @@ export default function UserReservationDetailModal({
                 จะไม่สามารถยกเลิกคิวได้
               </div>
 
-              {/* แถวปุ่ม: ซ้าย = ยกเลิก/แก้ไข, ขวา = ปิด */}
               <div className="mt-4 flex items-center justify-between gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   {canCancel && (
@@ -498,7 +497,7 @@ export default function UserReservationDetailModal({
             setShowPkg={(u) => setShowPkg(u)}
           />
 
-          {/* Edit drawer (โทน Amber ตามตัวอย่าง) */}
+          {/* Edit drawer */}
           {editStep === 1 && (
             <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50/40 p-4">
               <div className="mb-3 flex items-center justify-between">

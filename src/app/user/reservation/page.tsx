@@ -52,7 +52,7 @@ export default function ReservationPage() {
   const fetchedRef = useRef(false);
   const lastFetchedForRef = useRef<string | null>(null);
 
-   useEffect(() => {
+  useEffect(() => {
     if (authLoading) return;
     if (!user?.id) return;
     if (lastFetchedForRef.current === user.id) return;
@@ -116,7 +116,14 @@ export default function ReservationPage() {
       if (!email.trim()) throw new Error("กรุณากรอกอีเมล");
       if (!dateTime.trim()) throw new Error("กรุณาเลือกวันและเวลา");
       if (!partySize || partySize < 1) throw new Error("จำนวนคนต้องมากกว่า 0");
-
+      if (!/^\d{10}$/.test(phone)) {
+        throw new Error("กรุณากรอกเบอร์โทรศัพท์ให้เป็นตัวเลข 10 หลัก");
+      }
+      if (partySize > 40) {
+        throw new Error(
+          "รองรับสูงสุด 40 คนต่อหนึ่งการจอง หากต้องการจำนวนมากกว่านี้กรุณาจองอีกรอบ"
+        );
+      }
       const v = validateReservationTime(settings, localInputToISO(dateTime));
       if (!v.ok) throw new Error(v.msg);
 
@@ -296,8 +303,17 @@ export default function ReservationPage() {
             <LabeledInput
               label="เบอร์โทรศัพท์"
               placeholder="08xxxxxxxx"
+              type="tel"
+              inputMode="numeric"
+              pattern="\d{10}"
+              maxLength={10}
               value={phone}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                const digitsOnly = e.target.value
+                  .replace(/\D/g, "")
+                  .slice(0, 10);
+                setPhone(digitsOnly);
+              }}
             />
             <LabeledInput
               label="อีเมล"
@@ -309,8 +325,22 @@ export default function ReservationPage() {
               label="จำนวนคน"
               type="number"
               min={1}
+              max={40}
               value={partySize}
-              onChange={(e) => setPartySize(Number(e.target.value))}
+              onChange={(e) => {
+                const n = Number(e.target.value || 0);
+                if (n > 40) {
+                  setToast({
+                    type: "info",
+                    msg: "รองรับสูงสุด 40 คนต่อหนึ่งการจอง หากต้องการจำนวนมากกว่านี้กรุณาจองอีกรอบ",
+                  });
+                  setPartySize(40);
+                } else if (n < 1) {
+                  setPartySize(1);
+                } else {
+                  setPartySize(n);
+                }
+              }}
             />
             <LabeledInput
               label="ข้อมูลเพิ่มเติม"
