@@ -12,6 +12,8 @@ import {
 } from "@fortawesome/free-solid-svg-icons";
 import { statusClass } from "@/utils/status";
 import { toLocalInputValue, localInputToISO } from "@/utils/date";
+import { useAssignedTables } from "@/hooks/useAssignedTables";
+import PaidSummary from "../admin/reservation-detail/PaidSummary";
 
 type RowLike = {
   id: string;
@@ -55,6 +57,24 @@ type Props = {
 };
 
 const TH_TZ = "Asia/Bangkok";
+const formatTHB = (n: number | null | undefined) =>
+  typeof n === "number"
+    ? new Intl.NumberFormat("th-TH", {
+        style: "currency",
+        currency: "THB",
+      }).format(n)
+    : "—";
+
+type PaymentState = {
+  method: string | null;
+  total: number | null;
+  paidAt: string | null;
+  packageQty: number;
+  packages: { name: string; unitPrice: number; qty: number }[];
+  alaItems: { name: string; unitPrice: number; qty: number }[];
+  pkgSubtotal: number;
+  alaSubtotal: number;
+} | null;
 
 /* ---------- Helpers ---------- */
 const formatDisplayDate = (iso: string | null) => {
@@ -87,7 +107,14 @@ export default function UserReservationDetailModal({
   fallbackName,
 }: Props) {
   const [busy, setBusy] = useState(false);
-
+  const { assigned, load: loadAssignedTables } = useAssignedTables(
+    row?.id ?? null
+  );
+  const normStatus = (row?.status ?? "").toLowerCase();
+  const isPaid = normStatus === "paid";
+  const [showPkg, setShowPkg] = useState(false);
+  const [payment, setPayment] = useState<PaymentState>(null);
+  const [showItems, setShowItems] = useState(false);
   // steps
   const [editStep, setEditStep] = useState<0 | 1>(0);
   const [cancelStep, setCancelStep] = useState<0 | 1>(0);
@@ -106,6 +133,15 @@ export default function UserReservationDetailModal({
 
   // success banner (ให้ UI เหมือนตัวอย่าง)
   const [ok, setOk] = useState<string | null>(null);
+  const displayPhone =
+    (
+      (row as any)?.phone ??
+      (row as any)?.users?.phone ??
+      (row as any)?.user?.phone ??
+      ""
+    )
+      ?.toString()
+      ?.trim() || null;
 
   // sync local fields when row changes
   useEffect(() => {
@@ -129,6 +165,85 @@ export default function UserReservationDetailModal({
     setCancelStep(0);
     setOk(null);
   }, [row, open]);
+
+  useEffect(() => {
+    if (!open || !row?.id) return;
+
+    (async () => {
+      try {
+        const { data: bill } = await (await import("@/lib/supabaseClient"))
+          .createClient()
+          .from("bills")
+          .select("id, payment_method, total, created_at, status")
+          .eq("reservation_id", row.id)
+          .eq("status", "paid")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (!bill) {
+          setPayment(null);
+          return;
+        }
+
+        const supabase = (await import("@/lib/supabaseClient")).createClient();
+
+        const { data: pkgRows } = await supabase
+          .from("bill_items")
+          .select("name_snapshot, unit_price, quantity")
+          .eq("bill_id", bill.id)
+          .eq("kind", "package");
+
+        const packages = (pkgRows ?? []).map((it: any) => ({
+          name: String(it?.name_snapshot ?? "Package"),
+          unitPrice: Number(it?.unit_price ?? 0),
+          qty: Number(it?.quantity ?? 0),
+        }));
+        const packageQty = packages.reduce(
+          (s: any, it: { qty: any }) => s + it.qty,
+          0
+        );
+        const pkgSubtotal = packages.reduce(
+          (s: number, it: { unitPrice: number; qty: number }) =>
+            s + it.unitPrice * it.qty,
+          0
+        );
+
+        const { data: alaRows } = await supabase
+          .from("bill_items")
+          .select("name_snapshot, unit_price, quantity")
+          .eq("bill_id", bill.id)
+          .in("kind", ["item", "modifier"]);
+
+        const alaItems = (alaRows ?? []).map((it: any) => ({
+          name: String(it?.name_snapshot ?? "Item"),
+          unitPrice: Number(it?.unit_price ?? 0),
+          qty: Number(it?.quantity ?? 0),
+        }));
+        const alaSubtotal = alaItems.reduce(
+          (s: number, it: { unitPrice: number; qty: number }) =>
+            s + it.unitPrice * it.qty,
+          0
+        );
+
+        setPayment({
+          method: bill.payment_method ?? null,
+          total: Number(bill.total ?? 0),
+          paidAt: bill.created_at ?? null,
+          packageQty,
+          packages,
+          alaItems,
+          pkgSubtotal,
+          alaSubtotal,
+        });
+      } catch {
+        setPayment(null);
+      }
+    })();
+
+    // โหลดรายการโต๊ะที่ถูก assign
+    loadAssignedTables();
+  }, [open, row?.id, loadAssignedTables]);
 
   const tCell = tableText(row || ({} as RowLike));
 
@@ -223,6 +338,12 @@ export default function UserReservationDetailModal({
                   {row.queue_code ?? "—"}
                 </span>
               </div>
+              <div className="mt-1 text-xs opacity-90">
+                เบอร์โทรติดต่อ{" "}
+                <span className="font-medium text-indigo-700">
+                  {displayPhone ?? "—"}
+                </span>
+              </div>
             </div>
             <button
               onClick={onClose}
@@ -242,24 +363,24 @@ export default function UserReservationDetailModal({
               {ok}
             </div>
           )}
+          <section className="grid grid-cols-1 gap-3 md:grid-cols-2">
+            {/* Info grid */}
 
-          {/* Info grid (สไตล์การ์ดอ่อน ๆ แบบตัวอย่าง) */}
-          <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="text-xs text-gray-500">วันเวลา</div>
               <div className="mt-1 font-medium text-gray-900">
                 {formatDisplayDate(displayDatetime)}
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3">
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="text-xs text-gray-500">จำนวนที่นั่ง</div>
               <div className="mt-1 font-medium text-gray-900">
                 {String(displaySize ?? "—")}
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="text-xs text-gray-500">สถานะ</div>
               <span
                 className={`mt-2 inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${statusClass(
@@ -270,20 +391,33 @@ export default function UserReservationDetailModal({
               </span>
             </div>
 
-            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="text-xs text-gray-500">โต๊ะ</div>
-              <div className="mt-1 font-medium text-gray-900">
-                {row?.tbl?.table_name || row?.table_name || "ยังไม่มีโต๊ะ"}
+              <div className="mt-1 flex flex-wrap items-center gap-1 max-h-[72px] overflow-auto pr-1">
+                {assigned && assigned.length > 0 ? (
+                  assigned.map((t) => (
+                    <span
+                      key={t.id}
+                      className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700"
+                      title={t.name}
+                    >
+                      โต๊ะ: {t.no ?? t.name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-slate-400 text-xs">ยังไม่มีโต๊ะ</span>
+                )}
               </div>
             </div>
-            <div className="rounded-xl border border-gray-100 bg-gray-50/40 px-4 py-3 md:col-span-2">
-              <div className="text-xs text-gray-500">ข้อมูลเพิ่มเติม</div>
+            <div className="rounded-xl border border-gray-200 bg-white px-4 py-3">
               <div className="mt-1 whitespace-pre-wrap break-words font-medium text-gray-900">
-                {String(displayComment ?? "ไม่มีข้อมูลเพิ่มเติม")}
+                {displayComment?.toString().trim()
+                  ? displayComment
+                  : "ไม่มีข้อมูลเพิ่มเติม"}
               </div>
             </div>
-          </div>
-          {/* Cancelled info box (โชว์เมื่อยกเลิกแล้ว) */}
+          </section>
+          {/* Cancelled info box  */}
           {status.includes("cancel") && (
             <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-rose-800">
               <div className="text-sm font-semibold mb-3">ข้อมูลการยกเลิก</div>
@@ -309,9 +443,9 @@ export default function UserReservationDetailModal({
             </div>
           )}
 
-          {/* Actions (ให้หน้าตา/โทนปุ่มเหมือนตัวอย่าง) */}
+          {/* Actions */}
           {editStep === 0 && cancelStep === 0 && (
-            <div className="mt-6 flex flex-wrap items-center justify-end gap-2">
+            <>
               <div className="mt-2 text-[11px] text-gray-500">
                 หมายเหตุ: สามารถแก้ไขรายละเอียดได้เฉพาะสถานะ{" "}
                 <span className="font-medium">'Waiting'และะ 'Confirmed'</span>{" "}
@@ -320,36 +454,49 @@ export default function UserReservationDetailModal({
                 จะไม่สามารถยกเลิกคิวได้
               </div>
 
-              {allowEdit && (
-                <button
-                  type="button"
-                  onClick={() => setEditStep(1)}
-                  className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 shadow-sm transition hover:bg-amber-50"
-                  disabled={busy}
-                >
-                  แก้ไขรายละเอียด
-                </button>
-              )}
-              {canCancel && (
-                <button
-                  type="button"
-                  onClick={() => setCancelStep(1)}
-                  className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
-                  disabled={busy}
-                >
-                  ยกเลิกคิว
-                </button>
-              )}
+              {/* แถวปุ่ม: ซ้าย = ยกเลิก/แก้ไข, ขวา = ปิด */}
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {canCancel && (
+                    <button
+                      type="button"
+                      onClick={() => setCancelStep(1)}
+                      className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
+                      disabled={busy}
+                    >
+                      ยกเลิกคิว
+                    </button>
+                  )}
+                  {allowEdit && (
+                    <button
+                      type="button"
+                      onClick={() => setEditStep(1)}
+                      className="rounded-xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 shadow-sm transition hover:bg-amber-50"
+                      disabled={busy}
+                    >
+                      แก้ไขรายละเอียด
+                    </button>
+                  )}
+                </div>
 
-              <button
-                type="button"
-                onClick={onClose}
-                className="ml-auto rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
-              >
-                ปิด
-              </button>
-            </div>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50"
+                >
+                  ปิด
+                </button>
+              </div>
+            </>
           )}
+
+          {/* สรุปการชำระเงิน */}
+          <PaidSummary
+            payment={payment}
+            isPaid={isPaid}
+            showPkg={showPkg}
+            setShowPkg={(u) => setShowPkg(u)}
+          />
 
           {/* Edit drawer (โทน Amber ตามตัวอย่าง) */}
           {editStep === 1 && (
@@ -403,17 +550,15 @@ export default function UserReservationDetailModal({
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-end gap-2">
-                {canCancel && (
-                  <button
-                    type="button"
-                    onClick={() => setCancelStep(1)}
-                    className="rounded-xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 shadow-sm transition hover:bg-rose-50"
-                    disabled={busy}
-                  >
-                    ยกเลิกคิว
-                  </button>
-                )}
+              <div className="mt-4 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditStep(0)}
+                  className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium shadow-sm transition hover:bg-gray-50 disabled:opacity-60"
+                  disabled={busy}
+                >
+                  ย้อนกลับ
+                </button>
 
                 <button
                   type="button"
@@ -428,7 +573,7 @@ export default function UserReservationDetailModal({
             </div>
           )}
 
-          {/* Cancel drawer (โทน Rose ตามตัวอย่าง) */}
+          {/* Cancel drawer */}
           {cancelStep === 1 && canCancel && (
             <div className="mt-5 rounded-2xl border border-rose-200 bg-white p-4 ring-1 ring-rose-100">
               <div className="mb-2 flex items-center justify-between">

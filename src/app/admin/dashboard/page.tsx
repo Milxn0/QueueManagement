@@ -122,7 +122,7 @@ export default function TodayQueuePage() {
       // ---------- รวมสรุป ----------
       const tally = {
         all: todayRows.length || 0,
-        waiting: waitingAll?.length ?? 0, // ทั้งระบบ
+        waiting: waitingAll?.length ?? 0,
         confirmed: 0,
         seated: 0,
         paid: 0,
@@ -130,10 +130,10 @@ export default function TodayQueuePage() {
       };
       for (const r of todayRows) {
         const k = normalizeStatus?.(r?.status) ?? "";
-        if (k && k in tally) {
-          // @ts-expect-error index by key
-          tally[k] += 1;
-        }
+        if (!k) continue;
+        if (k === "waiting") continue;
+        // @ts-expect-error index by key
+        if (k in tally) tally[k] += 1;
       }
       setTotals(tally);
     } finally {

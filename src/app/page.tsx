@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -27,6 +27,20 @@ export default function HomePage() {
   const [myReservations, setMyReservations] = useState<Reservation[]>([]);
   // คิวถัดไป (เฉพาะ confirmed)
   const [confirmedQueues, setConfirmedQueues] = useState<Reservation[]>([]);
+
+  // --- paging (confirmedQueues) ---
+  const PAGE_SIZE = 10;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(confirmedQueues.length / PAGE_SIZE));
+
+  const pagedQueues = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return confirmedQueues.slice(start, start + PAGE_SIZE);
+  }, [confirmedQueues, page]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [totalPages, page]);
 
   useEffect(() => {
     let mounted = true;
@@ -185,6 +199,9 @@ export default function HomePage() {
               <ul className="space-y-3">
                 {myReservations.map((r) => {
                   const idx = getMyIndex(r);
+                  const isFirst = typeof idx === "number" && idx === 0;
+                  const status = (r.status ?? "").toLowerCase();
+
                   return (
                     <li
                       key={r.id}
@@ -196,41 +213,41 @@ export default function HomePage() {
                           {r.queue_code ?? "-"}
                         </p>
                       </div>
+
                       <div>
                         <p className="text-sm text-gray-500">วันเวลา</p>
                         <p className="font-medium">
                           {fmtTime(r.reservation_datetime)}
                         </p>
                       </div>
+
                       <div>
-                        {(() => {
-                          const status = (r.status ?? "").toLowerCase();
-                          const isFirst = typeof idx === "number" && idx === 0;
-
-                          if (status === "waiting") {
-                            return (
-                              <p className="text-lg font-semibold text-amber-600">
-                                รอพนักงานคอนเฟิร์ม
-                              </p>
-                            );
-                          }
-
-                          if (status === "confirmed" && isFirst) {
+                        {status === "waiting" ? (
+                          <p className="text-lg font-semibold text-amber-600">
+                            รอพนักงานคอนเฟิร์ม
+                          </p>
+                        ) : status === "confirmed" ? (
+                          (() => {
                             const msUntil =
                               new Date(r.reservation_datetime).getTime() -
                               Date.now();
-                            const within10m = msUntil <= 10 * 60 * 1000;
+                            const within10m =
+                              isFirst && msUntil <= 10 * 60 * 1000;
 
-                            return within10m ? (
-                              <div>
-                                <p className="text-lg font-semibold text-emerald-600">
-                                  คิวปัจจุบันคือคิวของคุณ
-                                </p>
-                                <p className="text-xs text-amber-600 mt-1">
-                                  กรุณารายงานตัวกับพนักงานภายใน 10 นาที
-                                </p>
-                              </div>
-                            ) : (
+                            if (within10m) {
+                              return (
+                                <div>
+                                  <p className="text-lg font-semibold text-emerald-600">
+                                    คิวปัจจุบันคือคิวของคุณ
+                                  </p>
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    กรุณารายงานตัวกับพนักงานภายใน 10 นาที
+                                  </p>
+                                </div>
+                              );
+                            }
+
+                            return (
                               <div>
                                 <p className="text-lg font-semibold text-indigo-600">
                                   พนักงานได้ยืนยันคิวแล้ว
@@ -240,32 +257,17 @@ export default function HomePage() {
                                 </p>
                               </div>
                             );
-                          }
-
-                          if (typeof idx === "number") {
-                            return (
-                              <>
-                                <p className="text-sm text-gray-500">
-                                  ถึงคิวในอีก
-                                </p>
-                                <p className="text-lg font-semibold text-emerald-600">
-                                  {idx} คิว
-                                </p>
-                              </>
-                            );
-                          }
-
-                          return (
-                            <>
-                              <p className="text-sm text-gray-500">
-                                ถึงคิวในอีก
-                              </p>
-                              <p className="text-lg font-semibold text-emerald-600">
-                                -
-                              </p>
-                            </>
-                          );
-                        })()}
+                          })()
+                        ) : (
+                          <>
+                            <p className="text-sm text-gray-500">
+                              ถึงคิวในอีก
+                            </p>
+                            <p className="text-lg font-semibold text-emerald-600">
+                              -
+                            </p>
+                          </>
+                        )}
                       </div>
                     </li>
                   );
@@ -289,56 +291,90 @@ export default function HomePage() {
             ยังไม่มีคิวในระบบ
           </div>
         ) : (
-          <ul className="divide-y rounded-xl border overflow-hidden">
-            {confirmedQueues.map((q, i) => {
-              const isMine = q.user_id === userId;
-              return (
-                <li
-                  key={q.id}
-                  className={[
-                    "px-4 py-3 flex items-center justify-between transition",
-                    isMine ? "bg-indigo-50/70" : "hover:bg-gray-50",
-                  ].join(" ")}
-                >
-                  <div className="flex items-center gap-3">
-                    {/* ลำดับคิว 1-based */}
-                    <span
-                      className={[
-                        "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold",
-                        isMine
-                          ? "border-indigo-400 text-indigo-700"
-                          : "border-gray-300 text-gray-600",
-                      ].join(" ")}
-                      title="ลำดับคิว"
-                    >
-                      {i + 1}
-                    </span>
-
-                    {/* รหัสคิว */}
-                    <span
-                      className={
-                        isMine
-                          ? "font-semibold text-indigo-700"
-                          : "font-semibold text-indigo-600"
-                      }
-                    >
-                      {q.queue_code ?? "-"}
-                    </span>
-
-                    {isMine && (
-                      <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
-                        คิวของคุณ
+          <>
+            <ul className="divide-y rounded-xl border overflow-hidden">
+              {pagedQueues.map((q, i) => {
+                const isMine = q.user_id === userId;
+                const globalIndex = (page - 1) * PAGE_SIZE + i + 1; // ลำดับคิวรวมทุกหน้า
+                return (
+                  <li
+                    key={q.id}
+                    className={[
+                      "px-4 py-3 flex items-center justify-between transition",
+                      isMine ? "bg-indigo-50/70" : "hover:bg-gray-50",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center gap-3">
+                      {/* ลำดับคิว 1-based (รวมทุกหน้า) */}
+                      <span
+                        className={[
+                          "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold",
+                          isMine
+                            ? "border-indigo-400 text-indigo-700"
+                            : "border-gray-300 text-gray-600",
+                        ].join(" ")}
+                        title="ลำดับคิว"
+                      >
+                        {globalIndex}
                       </span>
-                    )}
-                  </div>
 
-                  <span className="text-sm text-gray-600">
-                    {fmtTime(q.reservation_datetime)}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
+                      {/* รหัสคิว */}
+                      <span
+                        className={
+                          isMine
+                            ? "font-semibold text-indigo-700"
+                            : "font-semibold text-indigo-600"
+                        }
+                      >
+                        {q.queue_code ?? "-"}
+                      </span>
+
+                      {isMine && (
+                        <span className="ml-2 rounded-full bg-indigo-100 px-2 py-0.5 text-xs font-semibold text-indigo-700">
+                          คิวของคุณ
+                        </span>
+                      )}
+                    </div>
+
+                    <span className="text-sm text-gray-600">
+                      {fmtTime(q.reservation_datetime)}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Pager */}
+            {confirmedQueues.length > PAGE_SIZE && (
+              <div className="mt-3 flex items-center justify-between">
+                <span className="text-sm text-gray-600">
+                  หน้า{" "}
+                  <span className="font-medium text-gray-900">{page}</span> /{" "}
+                  {totalPages}
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    disabled={page <= 1}
+                    className="rounded-xl border px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    หน้าก่อนหน้า
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    disabled={page >= totalPages}
+                    className="rounded-xl border px-3 py-1.5 text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50"
+                  >
+                    หน้าถัดไป
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </section>
     </main>
