@@ -522,7 +522,17 @@ export default function ReservationDetailModal({
 
       if (editSize !== "") {
         const n = Number(editSize);
-        payload.partysize = Number.isFinite(n) ? n : null;
+        if (!Number.isFinite(n) || n < 1) {
+          showError("จำนวนที่นั่งต้องเป็นตัวเลขมากกว่า 0");
+          setBusy(false);
+          return;
+        }
+        if (n > 40) {
+          showError("รองรับสูงสุด 40 คนต่อหนึ่งการจอง");
+          setBusy(false);
+          return;
+        }
+        payload.partysize = n;
       }
       if (editComment?.trim()) payload.comment = editComment.trim();
 
@@ -603,6 +613,54 @@ export default function ReservationDetailModal({
   };
 
   const ALLOW_DIFF_MIN = 10;
+  const ASSIGN_ALLOW_DIFF_MIN = 15;
+  async function canAssignTablesForReservation(
+    targetId: string,
+    targetISO: string | null
+  ) {
+    if (!targetId || !targetISO) return true;
+    try {
+      const { data: rows, error } = await supabase
+        .from("reservations")
+        .select(
+          `
+        id,
+        reservation_datetime,
+        reservation_tables(count)
+      `
+        )
+        .is("cancelled_at", null)
+        .in("status", ["confirm", "confirmed", "seated"])
+        .order("reservation_datetime", { ascending: true })
+        .limit(10);
+
+      if (error || !rows || rows.length === 0) return true;
+
+      const earliest = rows.find((r: any) => {
+        const c = Array.isArray(r?.reservation_tables)
+          ? r.reservation_tables[0]?.count ?? 0
+          : 0;
+        return c === 0;
+      });
+
+      if (!earliest) return true;
+
+      if (earliest.id === targetId) return true;
+
+      const t = new Date(targetISO).getTime();
+      const e = new Date(earliest.reservation_datetime as string).getTime();
+      const diffMin = Math.abs(t - e) / (60 * 1000);
+
+      if (diffMin <= ASSIGN_ALLOW_DIFF_MIN) return true;
+
+      showError(
+        `กรุณาเลือกโต๊ะให้คิวก่อนหน้าก่อน หรือเลือกได้เมื่อเวลาห่างกันไม่เกิน ${ASSIGN_ALLOW_DIFF_MIN} นาที`
+      );
+      return false;
+    } catch {
+      return true;
+    }
+  }
   async function canConfirmThisReservation(
     targetId: string,
     targetISO: string | null
@@ -874,9 +932,22 @@ export default function ReservationDetailModal({
                     <input
                       type="number"
                       min={1}
-                      max={50}
+                      max={40}
                       value={editSize}
-                      onChange={(e) => setEditSize(e.target.value)}
+                      onChange={(e) => {
+                        const n = Number(e.target.value || 0);
+                        if (n > 40) {
+                          setNotice({
+                            type: "info",
+                            text: "รองรับสูงสุด 40 คนต่อหนึ่งการจอง",
+                          });
+                          setEditSize("40");
+                        } else if (n < 1) {
+                          setEditSize("1");
+                        } else {
+                          setEditSize(String(n));
+                        }
+                      }}
                       className="w-full rounded-lg border px-3 py-2 text-sm"
                       placeholder="เช่น 2"
                     />
@@ -968,6 +1039,14 @@ export default function ReservationDetailModal({
                     onClick={async () => {
                       try {
                         setBusy(true);
+                        const okAssign = await canAssignTablesForReservation(
+                          row.id,
+                          row.reservation_datetime ?? null
+                        );
+                        if (!okAssign) {
+                          setBusy(false);
+                          return;
+                        }
                         const res = await fetch(
                           `/api/admin/reservations/${row.id}/assign-tables`,
                           {
@@ -1080,8 +1159,13 @@ export default function ReservationDetailModal({
                   {(normStatus === "confirm" || normStatus === "confirmed") && (
                     <button
                       type="button"
-                      onClick={() => {
+                      onClick={async () => {
                         setCancelStep(0);
+                        const ok = await canAssignTablesForReservation(
+                          row.id,
+                          row.reservation_datetime ?? null
+                        );
+                        if (!ok) return;
                         setTableStep(1);
                       }}
                       className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-indigo-700"
