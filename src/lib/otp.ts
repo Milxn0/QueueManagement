@@ -8,10 +8,14 @@ export function genOTP() {
 export async function createOTP(phone: string) {
   const supabase = createClient();
   const code = genOTP();
-  const { error } = await supabase.from("otp_verifications").insert({
-    phone,
-    otp_code: code,
-  });
+
+  const payload = { phone, otp_code: code } as const;
+
+  const { error } = await supabase
+    .from("otp_verifications")
+
+    .insert(payload as never);
+
   if (error) throw error;
   return code;
 }
@@ -19,15 +23,19 @@ export async function createOTP(phone: string) {
 /** ตรวจ OTP ล่าสุดของหมายเลขโทรศัพท์ */
 export async function verifyOTP(phone: string, code: string) {
   const supabase = createClient();
+
   const { data, error } = await supabase
     .from("otp_verifications")
-    .select("*")
+    .select("otp_code")
     .eq("phone", phone)
     .order("created_at", { ascending: false })
     .limit(1);
 
   if (error) throw error;
-  const latest = data?.[0] as { otp_code?: string } | undefined;
+
+  const rows = (data as Array<{ otp_code?: string | null }> | null) ?? [];
+  const latest = rows[0];
   if (!latest) return false;
+
   return String(latest.otp_code ?? "") === String(code ?? "");
 }
