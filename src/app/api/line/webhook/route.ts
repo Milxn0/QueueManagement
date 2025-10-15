@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
         const { data: sess } = await supabase
           .from("line_link_sessions")
           .select(
-            "id, code, attempts, expires_at, user_id, reservation_id, verified_at, purpose"
+            "id, code, attempts, expires_at, user_id, reservation_id, verified_at, purpose, queue_code"
           )
           .eq("line_user_id", lineUserId)
           .eq("purpose", "otp")
@@ -100,7 +100,41 @@ export async function POST(req: NextRequest) {
           ]);
           continue;
         }
+        // กันผิดบัญชี: ถ้า session มี queue_code หรือ reservation_id ให้ตรวจเจ้าของก่อนผูก
+        const sessQueue = (sess as any).queue_code as string | undefined | null;
+        if (sessQueue) {
+          const { data: resv } = await supabase
+            .from("reservations")
+            .select("user_id")
+            .eq("queue_code", sessQueue)
+            .maybeSingle();
 
+          if (!resv || resv.user_id !== sess.user_id) {
+            await reply(replyToken, [
+              {
+                type: "text",
+                text: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้ กรุณาออกจากระบบแล้วล็อกอินด้วยบัญชีที่ถูกต้อง",
+              },
+            ]);
+            continue; 
+          }
+        } else if (sess.reservation_id) {
+          const { data: resv } = await supabase
+            .from("reservations")
+            .select("user_id")
+            .eq("id", sess.reservation_id)
+            .maybeSingle();
+
+          if (!resv || resv.user_id !== sess.user_id) {
+            await reply(replyToken, [
+              {
+                type: "text",
+                text: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้ กรุณาออกจากระบบแล้วล็อกอินด้วยบัญชีที่ถูกต้อง",
+              },
+            ]);
+            continue;
+          }
+        }
         // ถูกต้อง → ผูก line_user_id กับ user_id
         await supabase.from("line_links").upsert({
           line_user_id: lineUserId,
