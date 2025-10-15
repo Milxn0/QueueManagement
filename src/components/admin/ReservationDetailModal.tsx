@@ -485,6 +485,11 @@ export default function ReservationDetailModal({
       }
 
       await loadAssignedTables();
+      await fetch(`/api/admin/reservations/${row.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "seat" }),
+      }).catch(() => {});
       onUpdated?.();
     } catch (e: any) {
       setOptimisticTableNo(prevTable);
@@ -1326,6 +1331,11 @@ export default function ReservationDetailModal({
               await loadPaymentInfo(row.id);
               onUpdated?.();
               setTimeout(() => setOk(null), 1600);
+              await fetch(`/api/admin/reservations/${row.id}/status`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "paid" }),
+              }).catch(() => {});
             } catch (e: any) {
               showError(
                 "บันทึกการชำระเงินล้มเหลว: " + (e?.message || "Unknown error")

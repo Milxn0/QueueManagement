@@ -193,7 +193,11 @@ export default function TodayQueuePage() {
 
   const confirmReservation = useCallback(
     async (id: string) => {
-      await fetch(`/api/admin/reservations/${id}/confirm`, { method: "PATCH" });
+      await fetch(`/api/admin/reservations/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm" }),
+      });
       scheduleRefetch();
     },
     [scheduleRefetch]
