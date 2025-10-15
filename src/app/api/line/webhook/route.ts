@@ -181,7 +181,7 @@ export async function POST(req: NextRequest) {
         const sig2 = hmacSign(payload);
         const linkUrl = `${
           process.env.NEXT_PUBLIC_BASE_URL
-        }/line/link?token=${encodeURIComponent(payload)}&sig=${sig2}`;
+        }/user/line/link?token=${encodeURIComponent(payload)}&sig=${sig2}`;
 
         await reply(replyToken, [
           {
