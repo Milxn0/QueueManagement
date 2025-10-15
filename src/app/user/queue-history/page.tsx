@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable @typescript-eslint/no-unused-vars */
 "use client";
@@ -86,7 +87,28 @@ export default function UserReservationHistoryPage() {
     if (qErr) {
       setError(qErr.message);
     } else {
-      setRows((data ?? []) as Reservation[]);
+      const raw = (data ?? []) as any[];
+
+      const normalized: Reservation[] = raw.map((r) => {
+        const u = Array.isArray(r?.users) ? r.users?.[0] : r?.users;
+        const t = Array.isArray(r?.tbl) ? r.tbl?.[0] : r?.tbl;
+
+        return {
+          id: String(r.id),
+          user_id: String(r.user_id),
+          reservation_datetime: r.reservation_datetime ?? null,
+          partysize: r.partysize ?? null,
+          queue_code: r.queue_code ?? null,
+          comment: r.comment ?? null,
+          status: r.status ?? null,
+          table_id: r.table_id ?? null,
+          tbl: t ? { table_name: t.table_name ?? null } : null,
+          user: u ?? null,
+          users: u ?? null,
+        };
+      });
+
+      setRows(normalized);
     }
   }
 
@@ -103,7 +125,12 @@ export default function UserReservationHistoryPage() {
   const empty = useMemo(() => !loading && rows.length === 0, [loading, rows]);
 
   // modal handlers
-  async function handleSubmitEdit(id: string, iso: string, size: number, cmedit: string) {
+  async function handleSubmitEdit(
+    id: string,
+    iso: string,
+    size: number,
+    cmedit: string
+  ) {
     if (!me?.id) return;
     await updateReservationByUser(id, me.id, iso, size, cmedit);
     await refetch();
@@ -118,7 +145,7 @@ export default function UserReservationHistoryPage() {
         cancelled_reason: reason || "—",
         cancelled_by_user_id: me.id,
         cancelled_at: new Date().toISOString(),
-      }) 
+      })
       .eq("id", id)
       .eq("user_id", me.id);
     if (err) {
@@ -157,8 +184,6 @@ export default function UserReservationHistoryPage() {
       {!loading && !error && (
         <HistoryTable rows={rows} onOpenDetail={(r) => setDetailRow(r)} />
       )}
-
-     
 
       {detailRow && (
         <UserReservationDetailModal

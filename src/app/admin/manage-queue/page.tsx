@@ -44,9 +44,9 @@ export default function ManageQueuesPage() {
       setIsLoggedIn(!!data.user);
       setLoading(false);
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_e: any, s: { user: any }) => setIsLoggedIn(!!s?.user)
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
     return () => sub.subscription.unsubscribe();
   }, [supabase]);
 
@@ -572,8 +572,8 @@ export default function ManageQueuesPage() {
                 className="flex-1 min-w-[220px] md:min-w-[320px] max-w-xl rounded-xl border px-3 py-1.5 text-sm"
               />
               <div className="text-sm text-gray-500">
-                แสดง {Array.isArray(displayRows) ? displayRows.length : 0} รายการ
-                (ล่าสุด 200 แถว)
+                แสดง {Array.isArray(displayRows) ? displayRows.length : 0}{" "}
+                รายการ (ล่าสุด 200 แถว)
               </div>
             </div>
           </div>

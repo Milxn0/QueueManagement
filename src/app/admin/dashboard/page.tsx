@@ -35,9 +35,9 @@ export default function TodayQueuePage() {
       setIsLoggedIn(!!data.user);
       setLoading(false);
     })();
-    const { data: sub } = supabase.auth.onAuthStateChange(
-      (_e: any, s: { user: any }) => setIsLoggedIn(!!s?.user)
-    );
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
+      setIsLoggedIn(!!session?.user);
+    });
     return () => sub.subscription.unsubscribe();
   }, [supabase]);
 
