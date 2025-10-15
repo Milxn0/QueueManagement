@@ -17,7 +17,7 @@ export async function assignTable(reservationId: string, tableNo: number) {
   const tableId = await findTableIdByNo(tableNo);
   const { error } = await supabase
     .from("reservations")
-    .update({ table_id: tableId, status: "seated"})
+    .update({ table_id: tableId, status: "seated" })
     .eq("id", reservationId);
   if (error) throw error;
 }
@@ -36,7 +36,7 @@ export async function updateReservationByUser(
   userId: string,
   newReservationISO: string,
   newPartySize: number,
-  newComment: string,
+  newComment: string
 ) {
   const { error: upErr } = await supabase
     .from("reservations")
@@ -64,37 +64,53 @@ export async function cancelReservationByUser(
   if (upErr) throw upErr;
 }
 
-
 export async function insertReservationWithRetries(
   userId: string,
   reservationISO: string,
-  partySize: number,
-  comment: string
-) {
-  const res = await fetch("/api/user/reservations", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    credentials: "include",
-    body: JSON.stringify({
-      userId,
-      reservationISO,
-      partySize,
-      comment,
-    }),
-  });
+  partysize: number,
+  comment?: string
+): Promise<string> {
+  const payload = {
+    reservation_datetime: reservationISO,
+    partysize: Number(partysize),
+    comment: comment ?? null,
+  };
 
-  let payload: any = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
-  if (!res.ok) {
-    const msg = (payload && payload.error) || "สร้างการจองไม่สำเร็จ";
-    throw new Error(msg);
+  const MAX_RETRY = 2;
+  let lastErr: any = null;
+
+  for (let i = 0; i <= MAX_RETRY; i++) {
+    try {
+      const res = await fetch("/api/user/reservations/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      let data: any = null;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
+      if (!res.ok) {
+        const msg = data?.error || "สร้างการจองไม่สำเร็จ";
+        throw new Error(msg);
+      }
+
+      const queue = data?.queue_code || data?.queueCode || null;
+      if (!queue) throw new Error("ไม่พบรหัสคิวที่สร้างจากเซิร์ฟเวอร์");
+      return String(queue);
+    } catch (e: any) {
+      lastErr = e;
+      const msg = String(e?.message ?? "");
+      const retriable =
+        /UNIQUE|DUPLICATE|CANNOT_GENERATE_UNIQUE_QUEUE_CODE/i.test(msg);
+      if (!retriable || i === MAX_RETRY) break;
+      await new Promise((r) => setTimeout(r, 120 + Math.random() * 240));
+    }
   }
 
-  const queue = payload?.queue_code || payload?.queueCode || null;
-  if (!queue) throw new Error("ไม่พบรหัสคิวที่สร้างจากเซิร์ฟเวอร์");
-  return String(queue);
+  throw lastErr ?? new Error("สร้างการจองไม่สำเร็จ");
 }
