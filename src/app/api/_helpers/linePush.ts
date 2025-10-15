@@ -72,3 +72,17 @@ function statusLabel(s: string | null) {
   if (v.startsWith("wait")) return "กำลังรอ";
   return v || "ไม่ทราบสถานะ";
 }
+export async function pushLineByUserId(userId: string, messages: any[]) {
+  const { data: links } = await svc
+    .from("line_links")
+    .select("line_user_id")
+    .eq("user_id", userId);
+
+  if (!links?.length) return;
+
+  await Promise.all(links.map((l) => pushToLine(l.line_user_id, messages)));
+}
+
+export async function pushTextByUserId(userId: string, text: string) {
+  await pushLineByUserId(userId, [{ type: "text", text }]);
+}
