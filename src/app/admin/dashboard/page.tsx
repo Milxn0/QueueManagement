@@ -455,15 +455,15 @@ export default function TodayQueuePage() {
             const {
               data: { user },
             } = await supabase.auth.getUser();
-            await supabase
-              .from("reservations")
-              .update({
-                status: "cancelled",
-                cancelled_reason: reason,
-                cancelled_by_user_id: user?.id ?? null,
-                cancelled_at: new Date().toISOString(),
-              })
-              .eq("id", id);
+            await fetch(`/api/admin/reservations/${id}/status`, {
+              method: "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                action: "cancel",
+                reason,
+                by_user_id: user?.id ?? null,
+              }),
+            });
             fetchReservations();
           }}
           currentTableNo={currentTableNo}

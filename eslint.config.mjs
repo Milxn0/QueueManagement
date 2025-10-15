@@ -1,20 +1,42 @@
+import js from "@eslint/js";
 import tseslint from "typescript-eslint";
-import nextPlugin from "@next/eslint-plugin-next";
+import next from "eslint-config-next";
 
-/** @type {import("eslint").Linter.FlatConfig[]} */
 export default [
+  js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,
+  next,
+
   {
-    plugins: {
-      "@next/next": nextPlugin,
-    },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-    },
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       parserOptions: {
-        project: true,
+        project: ["./tsconfig.json"],
+        tsconfigRootDir: import.meta.dirname,
       },
+    },
+    rules: {
+      "@typescript-eslint/no-misused-promises": [
+        "error",
+        {
+          checksVoidReturn: { attributes: false, arguments: false },
+          checksConditionals: true,
+        },
+      ],
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+    },
+  },
+
+  {
+    files: [
+      "next.config.*",
+      "postcss.config.*",
+      "tailwind.config.*",
+      "*.cjs",
+      "*.cts",
+    ],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 ];
