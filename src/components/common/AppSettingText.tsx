@@ -26,30 +26,31 @@ export default function AppSettingText<K extends keyof AppSettings>({
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-  const cur = settings?.[keyName] as AppSettings[K] | undefined;
-  if (cur === undefined || cur === null || String(cur) === "") {
-    setLoading(true);
-    (async () => {
-      try {
-        const supabase = createClient();
+    const cur = settings?.[keyName] as AppSettings[K] | undefined;
+    if (cur === undefined || cur === null || String(cur) === "") {
+      setLoading(true);
+      (async () => {
+        try {
+          const supabase = createClient();
 
-        const { data, error } = await supabase
-          .from("app_settings")
-          .select(String(keyName))
-          .eq("id", 1)
-          .maybeSingle();
+          const { data, error } = await supabase
+            .from("app_settings")
+            .select(String(keyName))
+            .eq("id", 1)
+            .maybeSingle();
 
-        if (!error && data) {
-          setFallback(
-            (data[String(keyName)] ?? undefined) as AppSettings[K] | undefined
-          );
+          if (!error && data) {
+            setFallback(
+              ((data as unknown as Record<string, unknown>)[String(keyName)] ??
+                undefined) as AppSettings[K] | undefined
+            );
+          }
+        } finally {
+          setLoading(false);
         }
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }
-}, [settings, keyName]);
+      })();
+    }
+  }, [settings, keyName]);
 
   const val =
     (settings?.[keyName] as AppSettings[K] | undefined) ??

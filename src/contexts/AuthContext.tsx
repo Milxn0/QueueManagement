@@ -1,5 +1,4 @@
 /* eslint-disable react-hooks/exhaustive-deps */
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { createContext, useContext, useEffect, useMemo, useState } from "react";
@@ -62,7 +61,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
 
     const { data: sub } = supabase.auth.onAuthStateChange(
-      async (_evt: any, sess: { user: { id: string; email: any } }) => {
+      async (_evt, sess) => {
         if (!mounted) return;
         if (sess?.user) {
           const role = await fetchRole(sess.user.id);
