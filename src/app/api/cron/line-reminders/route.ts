@@ -1,10 +1,19 @@
-import { NextResponse } from "next/server";
+import { NextResponse, NextRequest } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { pushLineByUserId } from "@/app/api/_helpers/linePush"; 
+import { pushLineByUserId } from "@/app/api/_helpers/linePush";
 
 export const runtime = "nodejs";
 
-export async function GET() {
+export async function GET(req: NextRequest) {
+  // --- Secret check สำหรับ external cron ---
+  const key =
+    req.headers.get("x-cron-secret") ??
+    req.nextUrl.searchParams.get("key");
+  if (key !== process.env.CRON_SECRET) {
+    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
+  }
+  // ----------------------------------------
+
   const svc = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -12,7 +21,7 @@ export async function GET() {
 
   const now = new Date();
   const start = new Date(now.getTime() + 14 * 60 * 1000 - 30 * 1000);
-  const end   = new Date(now.getTime() + 15 * 60 * 1000 + 30 * 1000);
+  const end = new Date(now.getTime() + 15 * 60 * 1000 + 30 * 1000);
 
   const { data: rows, error } = await svc
     .from("reservations")
@@ -41,13 +50,11 @@ export async function GET() {
         },
       ]);
 
-      // มาร์คว่าระบบได้แจ้งแล้ว
       await svc
         .from("reservations")
         .update({ reminded_15m_at: new Date().toISOString() })
         .eq("id", r.id);
     } catch {
-      // กลืน error เพื่อไม่ให้หยุดทั้ง batch
     }
   }
 
