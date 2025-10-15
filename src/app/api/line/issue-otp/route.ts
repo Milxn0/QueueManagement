@@ -4,7 +4,7 @@ import { cookies } from "next/headers";
 import { createServerClient } from "@supabase/ssr";
 import { createClient } from "@supabase/supabase-js";
 import { hmacVerify } from "@/lib/line";
-export const runtime = "nodejs"; 
+export const runtime = "nodejs";
 const svc = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -27,13 +27,18 @@ export async function POST(req: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) return new NextResponse("Unauthorized", { status: 401 });
+  if (!user)
+    return NextResponse.json(
+      { error: "กรุณาเข้าสู่ระบบก่อน" },
+      { status: 401 }
+    );
 
   const { token, sig } = await req.json();
-  if (!token || !sig) return new NextResponse("Bad Request", { status: 400 });
+  if (!token || !sig)
+    return NextResponse.json({ error: "ลิงก์ไม่ถูกต้อง" }, { status: 400 });
 
   if (!hmacVerify(token, sig))
-    return new NextResponse("Invalid signature", { status: 403 });
+    return NextResponse.json({ error: "ลิงก์ไม่ถูกต้อง" }, { status: 400 });
 
   const [id, nonce] = token.split(".");
   const { data: t } = await svc
@@ -49,7 +54,10 @@ export async function POST(req: NextRequest) {
     t.nonce !== nonce ||
     new Date(t.expires_at) < new Date()
   ) {
-    return new NextResponse("Expired/Used", { status: 410 });
+    return NextResponse.json(
+      { error: "ลิงก์ไม่ถูกต้องหรือหมดอายุ" },
+      { status: 410 }
+    );
   }
 
   const { data: resv } = await svc
@@ -58,8 +66,12 @@ export async function POST(req: NextRequest) {
     .eq("queue_code", t.queue_code)
     .maybeSingle();
 
-  if (!resv || resv.user_id !== user.id)
-    return new NextResponse("Forbidden", { status: 403 });
+  if (!resv || resv.user_id !== user.id) {
+    return NextResponse.json(
+      { error: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้" },
+      { status: 409 }
+    );
+  }
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();

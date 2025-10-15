@@ -169,13 +169,6 @@ export async function POST(req: NextRequest) {
             .eq("line_user_id", lineUserId);
         }
 
-        // ถูกต้อง → ผูก line_user_id กับ user_id
-        await supabase.from("line_links").upsert({
-          line_user_id: lineUserId,
-          user_id: sess.user_id,
-          linked_at: now.toISOString(),
-        });
-
         await supabase
           .from("line_link_sessions")
           .update({ verified_at: now.toISOString() })
