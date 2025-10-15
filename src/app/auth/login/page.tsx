@@ -46,7 +46,16 @@ export default function LoginPage() {
       });
     } catch {}
 
+    // ถ้ามีพารามิเตอร์ ?next=... ให้เด้งกลับไปหน้านั้นก่อน
+    const sp = new URLSearchParams(window.location.search);
+    const next = sp.get("next");
+    const safeNext = next && next.startsWith("/") ? next : null;
+
     setLoading(false);
+    if (safeNext) {
+      router.replace(safeNext);
+      return;
+    }
     if (p?.role === "admin") {
       router.replace("/admin/dashboard");
     } else {
