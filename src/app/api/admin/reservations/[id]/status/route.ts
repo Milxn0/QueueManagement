@@ -6,14 +6,15 @@ export const runtime = "nodejs";
 
 type Action = "confirm" | "seat" | "paid" | "cancel";
 
-export async function PATCH(_req: Request, ctx: { params: { id: string } }) {
-  const { params } = ctx;
+export async function PATCH(req: Request, ctx: any) {
+  const id = (ctx?.params?.id as string) ?? "";
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const body = await _req.json().catch(() => ({} as any));
+  const body = await req.json().catch(() => ({} as any));
   const action = (body?.action as Action) || "confirm";
 
   let update: Record<string, any> = {};
@@ -34,15 +35,10 @@ export async function PATCH(_req: Request, ctx: { params: { id: string } }) {
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   }
 
-  const { error } = await supabase
-    .from("reservations")
-    .update(update)
-    .eq("id", params.id);
-
-  if (error)
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  const { error } = await supabase.from("reservations").update(update).eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   // ส่งแจ้งเตือนไป LINE
-  notifyReservationStatusChange(params.id).catch(() => {});
+  notifyReservationStatusChange(id).catch(() => {});
   return NextResponse.json({ ok: true });
 }
