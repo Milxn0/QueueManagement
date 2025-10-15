@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { hmacSign } from "@/lib/line";
-export const runtime = "nodejs"; 
+export const runtime = "nodejs";
 const CHANNEL_SECRET = process.env.LINE_CHANNEL_SECRET!;
 const CHANNEL_ACCESS_TOKEN = process.env.LINE_CHANNEL_ACCESS_TOKEN!;
 const supabase = createClient(
@@ -57,12 +57,14 @@ export async function POST(req: NextRequest) {
     // 1) ส่ง OTP
     if (OTP_RE.test(text)) {
       const otp = text;
+
       const { data: sess } = await supabase
-        .from("line_otp_sessions")
+        .from("line_link_sessions")
         .select(
-          "id, code, attempts, expires_at, user_id, reservation_id, verified_at"
+          "id, code, attempts, expires_at, user_id, reservation_id, verified_at, purpose"
         )
         .eq("line_user_id", lineUserId)
+        .eq("purpose", "otp")
         .is("verified_at", null)
         .order("expires_at", { ascending: false })
         .limit(1)
@@ -74,6 +76,7 @@ export async function POST(req: NextRequest) {
         ]);
         continue;
       }
+
       const now = new Date();
       if (new Date(sess.expires_at) < now) {
         await reply(replyToken, [
@@ -81,9 +84,10 @@ export async function POST(req: NextRequest) {
         ]);
         continue;
       }
+
       if (sess.code !== otp) {
         await supabase
-          .from("line_otp_sessions")
+          .from("line_link_sessions")
           .update({ attempts: (sess.attempts ?? 0) + 1 })
           .eq("id", sess.id);
         await reply(replyToken, [
@@ -100,7 +104,7 @@ export async function POST(req: NextRequest) {
       });
 
       await supabase
-        .from("line_otp_sessions")
+        .from("line_link_sessions")
         .update({ verified_at: now.toISOString() })
         .eq("id", sess.id);
 
@@ -144,13 +148,13 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // ยังไม่ผูก → ออกลิงก์ยืนยัน
       const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
       const nonce = crypto.randomBytes(16).toString("hex");
 
       const { data: tokenRow, error } = await supabase
-        .from("line_link_tokens")
+        .from("line_link_sessions")
         .insert({
+          purpose: "link",
           line_user_id: lineUserId,
           queue_code: queueCode,
           nonce,
@@ -167,10 +171,10 @@ export async function POST(req: NextRequest) {
       }
 
       const payload = `${tokenRow.id}.${nonce}`;
-      const sig = hmacSign(payload);
+      const sig2 = hmacSign(payload);
       const linkUrl = `${
         process.env.NEXT_PUBLIC_BASE_URL
-      }/line/link?token=${encodeURIComponent(payload)}&sig=${sig}`;
+      }/line/link?token=${encodeURIComponent(payload)}&sig=${sig2}`;
 
       await reply(replyToken, [
         {
@@ -189,62 +193,61 @@ export async function POST(req: NextRequest) {
         },
       ]);
       continue;
+
+      // 3) ข้อความอื่น ๆ
+      await reply(replyToken, [
+        {
+          type: "text",
+          text: "พิมพ์ Queue Code (เช่น Q-AB12CD) หรือส่ง OTP 6 หลัก",
+        },
+      ]);
     }
 
-    // 3) ข้อความอื่น ๆ
-    await reply(replyToken, [
-      {
-        type: "text",
-        text: "พิมพ์ Queue Code (เช่น Q-AB12CD) หรือส่ง OTP 6 หลัก",
-      },
-    ]);
+    return NextResponse.json({ ok: true });
   }
 
-  return NextResponse.json({ ok: true });
-}
-
-function flexReservation(r: any) {
-  return {
-    type: "flex",
-    altText: `รายละเอียดคิว ${r.queue_code}`,
-    contents: {
-      type: "bubble",
-      body: {
-        type: "box",
-        layout: "vertical",
-        spacing: "sm",
-        contents: [
-          {
-            type: "text",
-            text: `คิว ${r.queue_code}`,
-            weight: "bold",
-            size: "xl",
-          },
-          { type: "separator" },
-          {
-            type: "box",
-            layout: "vertical",
-            contents: [
-              { type: "text", text: `สถานะ: ${r.status}` },
-              { type: "text", text: `จำนวนที่นั่ง: ${r.partysize}` },
-              {
-                type: "text",
-                text: `เวลา: ${new Date(r.reservation_datetime).toLocaleString(
-                  "th-TH",
-                  {
+  function flexReservation(r: any) {
+    return {
+      type: "flex",
+      altText: `รายละเอียดคิว ${r.queue_code}`,
+      contents: {
+        type: "bubble",
+        body: {
+          type: "box",
+          layout: "vertical",
+          spacing: "sm",
+          contents: [
+            {
+              type: "text",
+              text: `คิว ${r.queue_code}`,
+              weight: "bold",
+              size: "xl",
+            },
+            { type: "separator" },
+            {
+              type: "box",
+              layout: "vertical",
+              contents: [
+                { type: "text", text: `สถานะ: ${r.status}` },
+                { type: "text", text: `จำนวนที่นั่ง: ${r.partysize}` },
+                {
+                  type: "text",
+                  text: `เวลา: ${new Date(
+                    r.reservation_datetime
+                  ).toLocaleString("th-TH", {
                     dateStyle: "medium",
                     timeStyle: "short",
                     timeZone: "Asia/Bangkok",
-                  }
-                )}`,
-              },
-              r.comment
-                ? { type: "text", text: `หมายเหตุ: ${r.comment}` }
-                : { type: "filler" },
-            ],
-          },
-        ],
+                  })}`,
+                },
+                r.comment
+                  ? { type: "text", text: `หมายเหตุ: ${r.comment}` }
+                  : { type: "filler" },
+              ],
+            },
+          ],
+        },
       },
-    },
-  };
+    };
+  }
 }
