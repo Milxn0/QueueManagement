@@ -37,7 +37,7 @@ async function reply(replyToken: string, messages: any[]) {
   });
 }
 
-const QUEUE_RE = /\bQ-[A-Z0-9]{4,12}\b/i;
+const QUEUE_RE = /\bQ-?[A-Z0-9]{4,12}\b/i;
 const OTP_RE = /^\d{6}$/;
 
 export async function POST(req: NextRequest) {
