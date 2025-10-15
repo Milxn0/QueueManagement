@@ -116,7 +116,7 @@ export async function POST(req: NextRequest) {
                 text: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้ กรุณาออกจากระบบแล้วล็อกอินด้วยบัญชีที่ถูกต้อง",
               },
             ]);
-            continue; 
+            continue;
           }
         } else if (sess.reservation_id) {
           const { data: resv } = await supabase
@@ -135,6 +135,40 @@ export async function POST(req: NextRequest) {
             continue;
           }
         }
+
+        // ถ้า LINE นี้เคยผูกกับ user อื่นอยู่ ให้หยุดและแจ้งผู้ใช้ก่อน
+        const { data: existingLink } = await supabase
+          .from("line_links")
+          .select("user_id")
+          .eq("line_user_id", lineUserId)
+          .maybeSingle();
+
+        if (existingLink && existingLink.user_id !== sess.user_id) {
+          await reply(replyToken, [
+            {
+              type: "text",
+              text:
+                "LINE นี้ถูกผูกกับบัญชีอื่นอยู่ หากต้องการผูกกับบัญชีปัจจุบัน " +
+                "กรุณาออกจากระบบบัญชีเดิม แล้วขอยกเลิกการผูกก่อน จากนั้นเริ่มยืนยันใหม่อีกครั้งค่ะ",
+            },
+          ]);
+          continue;
+        }
+
+        // ถ้าเคยผูกกับบัญชีนี้อยู่แล้ว ไม่ต้อง upsert ซ้ำ (อัปเดตเวลาผูกล่าสุดได้ตามต้องการ)
+        if (!existingLink) {
+          await supabase.from("line_links").insert({
+            line_user_id: lineUserId,
+            user_id: sess.user_id,
+            linked_at: new Date().toISOString(),
+          });
+        } else {
+          await supabase
+            .from("line_links")
+            .update({ linked_at: new Date().toISOString() })
+            .eq("line_user_id", lineUserId);
+        }
+
         // ถูกต้อง → ผูก line_user_id กับ user_id
         await supabase.from("line_links").upsert({
           line_user_id: lineUserId,
