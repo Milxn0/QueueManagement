@@ -38,7 +38,13 @@ export async function PATCH(req: Request, ctx: any) {
   const { error } = await supabase.from("reservations").update(update).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  // ส่งแจ้งเตือนไป LINE
-  notifyReservationStatusChange(id).catch(() => {});
+  if (action === "confirm") {
+    try {
+      await notifyReservationStatusChange(id);
+    } catch (e) {
+      console.error("[notify confirm] failed:", (e as Error)?.message);
+    }
+  }
+
   return NextResponse.json({ ok: true });
 }

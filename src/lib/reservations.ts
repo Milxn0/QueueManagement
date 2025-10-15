@@ -64,34 +64,37 @@ export async function cancelReservationByUser(
   if (upErr) throw upErr;
 }
 
-// insert เพิ
+
 export async function insertReservationWithRetries(
   userId: string,
   reservationISO: string,
   partySize: number,
   comment: string
 ) {
-  const MAX_RETRY = 5;
-  for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
-    const queue_code = genQueueCode();
-    const { error } = await supabase.from("reservations").insert({
-      user_id: userId,
-      reservation_datetime: reservationISO,
-      comment: comment,
-      partysize: partySize,
-      queue_code,
-      status: "waiting",
-    });
-    if (!error) return queue_code;
-    if (
-      String(error?.message || "")
-        .toLowerCase()
-        .includes("duplicate") &&
-      attempt < MAX_RETRY
-    ) {
-      continue;
-    }
-    if (attempt === MAX_RETRY) throw error ?? new Error("insert failed");
+  const res = await fetch("/api/user/reservations", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      userId,
+      reservationISO,
+      partySize,
+      comment,
+    }),
+  });
+
+  let payload: any = null;
+  try {
+    payload = await res.json();
+  } catch {
+    payload = null;
   }
-  throw new Error("ไม่สามารถบันทึกการจองได้ (queue_code ซ้ำหลายครั้ง)");
+  if (!res.ok) {
+    const msg = (payload && payload.error) || "สร้างการจองไม่สำเร็จ";
+    throw new Error(msg);
+  }
+
+  const queue = payload?.queue_code || payload?.queueCode || null;
+  if (!queue) throw new Error("ไม่พบรหัสคิวที่สร้างจากเซิร์ฟเวอร์");
+  return String(queue);
 }
