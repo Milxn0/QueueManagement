@@ -18,7 +18,8 @@ import {
 } from "@/utils/analytics";
 import SummaryCards from "@/components/admin/analytics/SummaryCards";
 import { useAnalyticsData } from "@/hooks/analytics/useAnalyticsData";
-
+import type { SupabaseClient } from "@supabase/supabase-js";
+export const runtime = "nodejs";
 export default function AnalyticsPage() {
   const supabase = useMemo(() => createClient(), []);
 
@@ -45,7 +46,20 @@ export default function AnalyticsPage() {
 
   const exportCSV = useCallback(
     (m: ExportMode, d: string, mo: string, y: string) =>
-      exportReservationsCSV(supabase, m, d, mo, y, setExporting),
+      exportReservationsCSV(
+        supabase as unknown as SupabaseClient<
+          any,
+          "public",
+          "public",
+          any,
+          any
+        >,
+        m,
+        d,
+        mo,
+        y,
+        setExporting
+      ),
     [supabase, setExporting]
   );
 
