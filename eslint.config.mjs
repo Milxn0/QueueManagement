@@ -1,31 +1,20 @@
-import js from "@eslint/js";
-import next from "@next/eslint-plugin-next";
 import tseslint from "typescript-eslint";
+import nextPlugin from "@next/eslint-plugin-next";
 
-export default tseslint.config(
+/** @type {import("eslint").Linter.FlatConfig[]} */
+export default [
+  ...tseslint.configs.recommendedTypeChecked,
   {
-    ignores: [
-      ".next/**",
-      "out/**",
-      "dist/**",
-      "build/**",
-      "coverage/**",
-      "node_modules/**",
-      "public/**/*.js",
-      "public/**/*.min.js",
-      "**/*.min.js",
-    ],
+    plugins: {
+      "@next/next": nextPlugin,
+    },
+    rules: {
+      ...nextPlugin.configs.recommended.rules,
+    },
+    languageOptions: {
+      parserOptions: {
+        project: true,
+      },
+    },
   },
-
-  js.configs.recommended,
-
-  ...tseslint.configs.recommended,
-
-  next.configs["core-web-vitals"],
-
-  {
-    files: ["**/*.{ts,tsx}"],
-    languageOptions: {},
-    rules: {},
-  }
-);
+];
