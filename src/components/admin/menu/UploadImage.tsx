@@ -4,11 +4,12 @@ import { useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 
 type Props = {
+  menuId?: string;
   onUploaded: (url: string) => void;
   initialUrl?: string;
 };
 
-export default function UploadImage({ onUploaded, initialUrl }: Props) {
+export default function UploadImage({ menuId, onUploaded, initialUrl }: Props) {
   const supabase = createClient();
   const [uploading, setUploading] = useState(false);
   const [preview, setPreview] = useState(initialUrl || "");
@@ -20,28 +21,24 @@ export default function UploadImage({ onUploaded, initialUrl }: Props) {
     setUploading(true);
 
     try {
-      // ✅ ใช้ชื่อไฟล์ที่ปลอดภัย (timestamp + original name)
-      const safeFileName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, "_");
-      const fileName = `${Date.now()}_${safeFileName}`;
-
-      // ✅ อัปโหลดไฟล์ไปยัง Supabase Storage
+      const fileName = `${Date.now()}_${file.name}`;
       const { data, error } = await supabase.storage
         .from("menu-images")
         .upload(fileName, file);
 
       if (error) throw error;
 
-      // ✅ ดึง public URL
       const { data: publicData } = supabase.storage
         .from("menu-images")
         .getPublicUrl(data.path);
 
       const imageUrl = publicData.publicUrl;
-
       setPreview(imageUrl);
       onUploaded(imageUrl);
-      alert("✅ อัปโหลดสำเร็จแล้ว!");
+
+      alert("✅ อัปโหลดเรียบร้อยแล้ว!");
     } catch (err: any) {
+      console.error(err);
       alert("❌ อัปโหลดไม่สำเร็จ: " + err.message);
     } finally {
       setUploading(false);
@@ -50,7 +47,6 @@ export default function UploadImage({ onUploaded, initialUrl }: Props) {
 
   return (
     <div className="space-y-2">
-      {/* รูป Preview */}
       {preview ? (
         <img
           src={preview}
@@ -63,17 +59,14 @@ export default function UploadImage({ onUploaded, initialUrl }: Props) {
         </div>
       )}
 
-      {/* ปุ่มเลือกไฟล์ */}
       <input
         type="file"
         accept="image/*"
         onChange={handleUpload}
         disabled={uploading}
-        className="w-full text-sm"
       />
-
       {uploading && (
-        <p className="text-xs text-gray-500 animate-pulse">กำลังอัปโหลด...</p>
+        <p className="text-sm text-gray-500">กำลังอัปโหลด...</p>
       )}
     </div>
   );

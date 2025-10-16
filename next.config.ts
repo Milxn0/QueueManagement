@@ -1,9 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-   eslint: {
+  eslint: {
     ignoreDuringBuilds: true,
+  },
+  images: {
+    domains: [
+      "images.unsplash.com",
+      "pexels.com",
+      "cdn.pixabay.com",
+      "lh3.googleusercontent.com",
+      "xrxnwricckxzuhswoasc.supabase.co",
+    ],
   },
 };
 
