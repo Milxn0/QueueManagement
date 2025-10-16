@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-
+import { exportReservationsXLSX } from "@/utils/exportReservationsXLSX";
 import { useCallback, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import { monthRangeFromYYYYMM } from "@/utils/date";
@@ -62,6 +62,27 @@ export default function AnalyticsPage() {
       ),
     [supabase, setExporting]
   );
+
+
+  const exportXLSX = useCallback(
+  (m: ExportMode, d: string, mo: string, y: string) =>
+    exportReservationsXLSX(
+      supabase as unknown as SupabaseClient<
+        any,
+        "public",
+        "public",
+        any,
+        any
+      >,
+      m,
+      d,
+      mo,
+      y,
+      setExporting
+    ),
+  [supabase, setExporting]
+);
+
 
   const { loading, err, rows } = useAnalyticsData({
     supabase,
@@ -136,6 +157,7 @@ export default function AnalyticsPage() {
               setYearVal={setYearVal}
               exporting={exporting || loading}
               onExport={exportCSV}
+              onExportExcel={exportXLSX}
             />
           </div>
         </div>

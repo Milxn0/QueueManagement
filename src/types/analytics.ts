@@ -37,7 +37,7 @@ export type Row = {
     email: string | null;
   } | null;
 };
-export type ExportMode = "day" | "month" | "year";
+export type ExportMode = "all" | "day" | "month" | "year";
 export type Dataset = "reservations" | "users";
 
 export type UsersDailyRow = { date: string; customer: number; staff: number };
