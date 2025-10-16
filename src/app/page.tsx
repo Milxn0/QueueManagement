@@ -7,6 +7,7 @@ import Link from "next/link";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faLayerGroup } from "@fortawesome/free-solid-svg-icons/faLayerGroup";
 
+
 type Reservation = {
   id: string;
   user_id: string | null;
