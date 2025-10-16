@@ -10,7 +10,6 @@ import { useSettings } from "@/hooks/useSettings";
 import type { Step } from "@/types/reservation";
 import { pad, toInputValue, localInputToISO } from "@/utils/date";
 import { validateReservationTime } from "@/utils/reservation";
-import { createOTP, verifyOTP } from "@/lib/otp";
 import { ensureProfile } from "@/lib/profile";
 import { insertReservationWithRetries } from "@/lib/reservations";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
@@ -128,8 +127,17 @@ export default function ReservationPage() {
       if (!v.ok) throw new Error(v.msg);
 
       setBusy(true);
-      const code = await createOTP(phone);
-      setOtpSent(code);
+      const res = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok === false) {
+        throw new Error(json?.error ?? "ไม่สามารถส่ง OTP ได้");
+      }
+      setOtpSent(json?.code ?? null);
+
       setToast({
         type: "success",
         msg: "ส่งรหัส OTP แล้ว กรุณากรอกรหัสเพื่อยืนยัน",
@@ -147,8 +155,21 @@ export default function ReservationPage() {
       if (!otp.trim()) throw new Error("กรุณากรอกรหัส OTP");
       setBusy(true);
 
-      const ok = await verifyOTP(phone, otp);
-      if (!ok) throw new Error("รหัส OTP ไม่ถูกต้อง");
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: otp }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || json?.ok !== true) {
+        throw new Error(
+          json?.reason === "otp_incorrect"
+            ? "รหัส OTP ไม่ถูกต้อง"
+            : json?.reason === "otp_not_found_or_expired"
+            ? "OTP หมดอายุหรือไม่พบ กรุณาขอใหม่"
+            : json?.error ?? "ยืนยัน OTP ไม่สำเร็จ"
+        );
+      }
 
       if (!user?.id) throw new Error("กรุณาเข้าสู่ระบบก่อน");
       // ensure profile
