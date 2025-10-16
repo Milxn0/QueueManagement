@@ -62,11 +62,14 @@ export async function POST(req: NextRequest) {
     if (insertErr) throw insertErr;
 
     // ส่ง SMS
-    await sendSMS(e164, `รหัสยืนยันของคุณคือ ${code} (หมดอายุใน 5 นาที)`);
-
+    const tw = await sendSMS(
+      e164,
+      `รหัสยืนยันของคุณคือ ${code} (หมดอายุใน 5 นาที)`
+    );
+    console.log("[otp/send] twilio create:", { sid: tw.sid, to: e164 });
     return NextResponse.json({
       ok: true,
-      ...(process.env.NODE_ENV !== "production" ? { code } : {}),
+      ...(process.env.NODE_ENV !== "production" ? { code, sid: tw.sid } : {}),
     });
   } catch (e: any) {
     return NextResponse.json(
