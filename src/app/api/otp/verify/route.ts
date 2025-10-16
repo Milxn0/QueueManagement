@@ -15,29 +15,21 @@ export async function POST(req: NextRequest) {
         { status: 500 }
       );
     }
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    const { phone, code } = await req.json();
 
-    if (!phone || !code) {
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const { email, code } = await req.json();
+    if (!email || !code) {
       return NextResponse.json({ error: "invalid_payload" }, { status: 400 });
     }
 
-    const to = (() => {
-      const p = String(phone).trim();
-      if (p.startsWith("+") && /^\+\d{9,15}$/.test(p)) return p;
-      const d = p.replace(/\D/g, "");
-      if (/^0\d{9}$/.test(d)) return `+66${d.slice(1)}`;
-      if (/^66\d{8,12}$/.test(d)) return `+${d}`;
-      if (/^\d{9,15}$/.test(d)) return `+${d}`;
-      throw new Error("invalid phone");
-    })();
+    const normEmail = String(email).toLowerCase();
 
     // ดึง OTP ล่าสุดภายใน 5 นาที
     const since = new Date(Date.now() - 5 * 60_000).toISOString();
     const { data, error } = await supabase
       .from("otp_verifications")
       .select("id, otp_code, created_at")
-      .eq("phone", to)
+      .eq("email", normEmail)
       .gte("created_at", since)
       .order("created_at", { ascending: false })
       .limit(1)

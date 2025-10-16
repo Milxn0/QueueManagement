@@ -130,7 +130,7 @@ export default function ReservationPage() {
       const res = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone }),
+        body: JSON.stringify({ email }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) {
@@ -158,7 +158,7 @@ export default function ReservationPage() {
       const res = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone, code: otp }),
+        body: JSON.stringify({ email, code: otp }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok !== true) {
