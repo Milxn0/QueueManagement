@@ -235,7 +235,19 @@ export default function ReservationPage() {
               {queueCode}
             </div>
           </div>
-
+          <div className="mt-6 rounded-xl border bg-gray-50 p-4">
+            <div className="text-sm text-gray-600">
+              ติดตามสถานะคิวผ่าน Line{" "}
+              <p>พร้อมรับแจ้งเตือนเมื่อคิวของคุณมีการเปลี่ยนแปลง</p>
+            </div>
+            <div className="mt-3 flex justify-center">
+              <img
+                src="/82d41241-dd1b-4d7d-868f-09e7f42e3246.jfif"
+                alt="QR Code สำหรับติดตามสถานะคิว Line"
+                className="w-48 h-48 object-contain rounded-lg shadow-md"
+              />
+            </div>
+          </div>
           <div className="mt-6 flex gap-3">
             <Link
               href="/"

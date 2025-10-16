@@ -39,6 +39,7 @@ async function reply(replyToken: string, messages: any[]) {
 
 const QUEUE_RE = /\bQ-?[A-Z0-9]{4,12}\b/i;
 const OTP_RE = /^\d{6}$/;
+const LINK_RE = /^(เชื่อมต่อ|link|connect)$/i;
 
 export async function POST(req: NextRequest) {
   try {
@@ -59,6 +60,55 @@ export async function POST(req: NextRequest) {
       const text = (ev.message.text as string).trim();
       const lineUserId = ev.source?.userId as string;
 
+      // 0) ผู้ใช้พิมพ์ "เชื่อมต่อ" (ไม่มี Queue Code)
+      if (LINK_RE.test(text)) {
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        const nonce = crypto.randomBytes(16).toString("hex");
+
+        const { data: tokenRow, error } = await supabase
+          .from("line_link_sessions")
+          .insert({
+            purpose: "link",
+            line_user_id: lineUserId,
+            nonce,
+            expires_at: expiresAt,
+          })
+          .select("id")
+          .single();
+
+        if (error || !tokenRow) {
+          await reply(replyToken, [
+            { type: "text", text: "มีข้อผิดพลาด กรุณาลองใหม่อีกครั้ง" },
+          ]);
+          continue;
+        }
+
+        const payload = `${tokenRow.id}.${nonce}`;
+        const sig2 = hmacSign(payload);
+        const linkUrl = `${
+          process.env.NEXT_PUBLIC_BASE_URL
+        }/user/line/link?token=${encodeURIComponent(payload)}&sig=${sig2}`;
+
+        await reply(replyToken, [
+          {
+            type: "text",
+            text: "กดลิงก์เพื่อเข้าสู่ระบบและรับ OTP แล้วส่งรหัสนั้นกลับมาในแชทนี้เพื่อผูกบัญชี",
+          },
+          {
+            type: "template",
+            altText: "ยืนยันตัวตน",
+            template: {
+              type: "buttons",
+              title: "ยืนยันตัวตน",
+              text: "เข้าสู่ระบบเพื่อรับ OTP",
+              actions: [
+                { type: "uri", label: "กดยืนยัน/ล็อกอิน", uri: linkUrl },
+              ],
+            },
+          },
+        ]);
+        continue;
+      }
       // 1) ผู้ใช้ส่ง OTP
       if (OTP_RE.test(text)) {
         const otp = text;

@@ -60,17 +60,21 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const { data: resv } = await svc
-    .from("reservations")
-    .select("id, user_id")
-    .eq("queue_code", t.queue_code)
-    .maybeSingle();
+  let resv: { id: string; user_id: string } | null = null;
+  if (t.queue_code) {
+    const { data: r } = await svc
+      .from("reservations")
+      .select("id, user_id")
+      .eq("queue_code", t.queue_code)
+      .maybeSingle();
 
-  if (!resv || resv.user_id !== user.id) {
-    return NextResponse.json(
-      { error: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้" },
-      { status: 409 }
-    );
+    if (!r || r.user_id !== user.id) {
+      return NextResponse.json(
+        { error: "บัญชีที่ล็อกอินไม่ใช่เจ้าของ Queue นี้" },
+        { status: 409 }
+      );
+    }
+    resv = r;
   }
 
   const code = Math.floor(100000 + Math.random() * 900000).toString();
@@ -82,11 +86,12 @@ export async function POST(req: NextRequest) {
     .update({ used_at: new Date().toISOString() })
     .eq("id", t.id);
 
+  // ✅ ออก OTP โดยไม่ต้องมี reservation_id ก็ได้
   await svc.from("line_link_sessions").insert({
     purpose: "otp",
     line_user_id: t.line_user_id,
     user_id: user.id,
-    reservation_id: resv.id,
+    reservation_id: resv?.id ?? null,
     code,
     expires_at: expiresAt,
   });
