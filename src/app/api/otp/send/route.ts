@@ -1,9 +1,8 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { sendSMS } from "@/lib/twilio";
-
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 function genOTP() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }

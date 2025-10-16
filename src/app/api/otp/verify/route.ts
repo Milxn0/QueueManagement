@@ -1,15 +1,16 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   try {
     const SUPABASE_URL = process.env.SUPABASE_URL;
     const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       return NextResponse.json(
-        { error: "env_not_configured: missing SUPABASE_URL / SERVICE_ROLE_KEY" },
+        {
+          error: "env_not_configured: missing SUPABASE_URL / SERVICE_ROLE_KEY",
+        },
         { status: 500 }
       );
     }
