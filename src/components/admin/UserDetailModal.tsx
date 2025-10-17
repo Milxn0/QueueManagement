@@ -211,15 +211,37 @@ export default function UserDetailModal({
     setDelBusy(true);
     setErr(null);
     setMsg(null);
+
     try {
-      const res = await fetch("/api/admin/users/delete", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ id: user.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.error || "ลบไม่สำเร็จ");
+      // 1) ย้าย userid ของ reservations ไปเป็นผู้ใช้ระบบ "delete_user"
+      const DELETE_USER_ID = "00000000-0000-0000-0000-000000000001";
+      const { error: reassignErr } = await supabase
+        .from("reservations")
+        .update({ user_id: DELETE_USER_ID })
+        .eq("user_id", user.id);
+      if (reassignErr) throw reassignErr;
+
+      // 2) ลบจาก Supabase 
+      const tryDeleteAuth = async () => {
+        const fallback = await fetch("/api/admin/users/delete", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({ id: user.id, onlyAuth: true }),
+        });
+        if (!fallback.ok) {
+          const js = await fallback.json().catch(() => ({}));
+          throw new Error(js?.error || "ลบผู้ใช้ออกจาก Auth ไม่สำเร็จ");
+        }
+      };
+      await tryDeleteAuth();
+
+      // 3) ลบ record ใน public.users
+      const { error: delUserErr } = await supabase
+        .from("users")
+        .delete()
+        .eq("id", user.id);
+      if (delUserErr) throw delUserErr;
 
       setMsg("ลบผู้ใช้สำเร็จ");
       onDeleted?.();
@@ -269,7 +291,7 @@ export default function UserDetailModal({
           <div className="flex items-start justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full bg-white/70 px-3 py-1 text-[11px] font-semibold text-indigo-700 ring-1 ring-indigo-100">
-              <FontAwesomeIcon icon={faAddressCard} />
+                <FontAwesomeIcon icon={faAddressCard} />
                 รายละเอียดผู้ใช้
               </div>
               <h3 className="mt-2 text-lg font-semibold text-gray-900">
