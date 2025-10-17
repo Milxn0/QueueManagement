@@ -28,6 +28,7 @@ export default function MenuList({ menus, onEdit, onDelete }: MenuListProps) {
             <th className="px-4 py-3 text-center font-medium text-gray-600">จัดการ</th>
           </tr>
         </thead>
+
         <tbody className="divide-y divide-gray-100">
           {menus.length === 0 ? (
             <tr>
@@ -38,6 +39,7 @@ export default function MenuList({ menus, onEdit, onDelete }: MenuListProps) {
           ) : (
             menus.map((m) => (
               <tr key={m.id} className="hover:bg-gray-50 transition">
+                {/* รูปภาพ */}
                 <td className="px-4 py-2">
                   {m.image_url ? (
                     <img
@@ -51,24 +53,34 @@ export default function MenuList({ menus, onEdit, onDelete }: MenuListProps) {
                     </div>
                   )}
                 </td>
+
+                {/* ชื่อเมนู */}
                 <td className="px-4 py-2 font-medium text-gray-800">{m.name}</td>
+
+                {/* หมวดหมู่ */}
                 <td className="px-4 py-2 text-gray-600">{m.category}</td>
+
+                {/* ชื่อไทย */}
                 <td className="px-4 py-2 text-gray-600">
                   {m.description || "-"}
                 </td>
+
+                {/* ปุ่มจัดการ */}
                 <td className="px-4 py-2 text-center">
-                  <button
-                    onClick={() => onEdit(m)}
-                    className="text-indigo-600 hover:text-indigo-800 text-sm font-medium mr-3"
-                  >
-                    แก้ไข
-                  </button>
-                  <button
-                    onClick={() => onDelete(m.id)}
-                    className="text-red-500 hover:text-red-700 text-sm font-medium"
-                  >
-                    ลบ
-                  </button>
+                  <div className="flex justify-center gap-2">
+                    <button
+                      onClick={() => onEdit(m)}
+                      className="flex items-center justify-center gap-1 bg-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-600 transition active:scale-[.97]"
+                    >
+                      แก้ไข
+                    </button>
+                    <button
+                      onClick={() => onDelete(m.id)}
+                      className="flex items-center justify-center gap-1 bg-red-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-red-600 transition active:scale-[.97]"
+                    >
+                      ลบ
+                    </button>
+                  </div>
                 </td>
               </tr>
             ))

@@ -1,185 +1,214 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabaseClient";
 import UploadImage from "./UploadImage";
-
-type Menu = {
-  id?: string;
-  name: string;
-  description: string;
-  category: string;
-  image_url?: string;
-};
+import Toast from "@/components/ui/Toast";
 
 type Props = {
-  menu?: Menu | null;
+  menu?: any;
   onClose: () => void;
 };
 
 export default function MenuForm({ menu, onClose }: Props) {
   const supabase = createClient();
+
   const [name, setName] = useState(menu?.name || "");
   const [description, setDescription] = useState(menu?.description || "");
-  const [category, setCategory] = useState(menu?.category || "A LA CARTE เส้น");
+  const [category, setCategory] = useState(menu?.category || "");
   const [imageUrl, setImageUrl] = useState(menu?.image_url || "");
   const [saving, setSaving] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
 
-  // ฟังก์ชันบันทึกเมนู (เพิ่มหรือแก้ไข)
+  // Toast state
+  const [toast, setToast] = useState<
+    { type: "error" | "success" | "info"; msg: string } | null
+  >(null);
+
+  // โหลดหมวดหมู่ทั้งหมดจาก DB
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const { data, error } = await supabase
+        .from("menus")
+        .select("category")
+        .not("category", "is", null);
+
+      if (error) {
+        setToast({ type: "error", msg: "โหลดหมวดหมู่ไม่สำเร็จ" });
+        return;
+      }
+
+      const uniqueCats = Array.from(
+        new Set(
+          data
+            .map((d) => d.category?.trim().toUpperCase())
+            .filter((v) => !!v)
+        )
+      ).sort();
+
+      setCategories(uniqueCats);
+    };
+
+    fetchCategories();
+  }, [supabase]);
+
+  // โหลดข้อมูลเมื่อแก้ไขเมนู
+  useEffect(() => {
+    if (menu) {
+      setName(menu.name || "");
+      setDescription(menu.description || "");
+      setCategory(menu.category || "");
+      setImageUrl(menu.image_url || "");
+    }
+  }, [menu]);
+
   const handleSave = async () => {
-    if (!name.trim() || !description.trim() || !category.trim()) {
-      alert("⚠️ กรุณากรอกข้อมูลให้ครบทุกช่อง");
+    if (!name || !category) {
+      setToast({ type: "error", msg: "กรุณากรอกชื่อเมนูและหมวดหมู่" });
       return;
     }
 
     setSaving(true);
-
     try {
+      const cleanCategory = category.trim().toUpperCase();
+      const cleanName = name.trim();
+      const cleanDesc = description.trim();
+
+      const payload = {
+        name: cleanName,
+        description: cleanDesc,
+        category: cleanCategory,
+        image_url: imageUrl || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      let res;
       if (menu?.id) {
-        // ✅ แก้ไขเมนูเก่า
-        const { error } = await supabase
-          .from("menus")
-          .update({
-            name,
-            description,
-            category,
-            image_url: imageUrl || null,
-          })
-          .eq("id", menu.id);
-
-        if (error) throw error;
-        alert("✅ อัปเดตเมนูเรียบร้อยแล้ว!");
+        // แก้ไขเมนู
+        res = await supabase.from("menus").update(payload).eq("id", menu.id);
       } else {
-        // ✅ เพิ่มเมนูใหม่
-        const { data, error } = await supabase
+        // เพิ่มเมนูใหม่
+        res = await supabase
           .from("menus")
-          .insert([
-            {
-              name,
-              description,
-              category,
-              image_url: null, // ใส่ null ไว้ก่อน (ยังไม่อัปโหลด)
-            },
-          ])
-          .select("id")
-          .single();
-
-        if (error) throw error;
-
-        // ✅ ถ้ามีรูป ให้ update image_url หลังจากสร้างเมนูสำเร็จ
-        if (imageUrl && data?.id) {
-          const { error: imgError } = await supabase
-            .from("menus")
-            .update({ image_url: imageUrl })
-            .eq("id", data.id);
-
-          if (imgError) throw imgError;
-        }
-
-        alert("✅ เพิ่มเมนูใหม่สำเร็จ!");
+          .insert({ ...payload, created_at: new Date().toISOString() });
       }
 
+      if (res.error) throw res.error;
+
+      setToast({ type: "success", msg: "บันทึกข้อมูลเมนูสำเร็จ" });
       onClose();
     } catch (err: any) {
       console.error(err);
-      alert("❌ เกิดข้อผิดพลาด: " + err.message);
+      setToast({ type: "error", msg: "เกิดข้อผิดพลาด: " + err.message });
     } finally {
       setSaving(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 flex items-center justify-center bg-black/50 z-50">
-      <div className="bg-white w-full max-w-md p-6 rounded-xl shadow-lg space-y-4">
-        {/* ส่วนหัว */}
-        <div className="flex justify-between items-center mb-2">
-          <h2 className="text-xl font-bold">
-            {menu ? "แก้ไขเมนู" : "เพิ่มเมนูใหม่"}
-          </h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            ✕
-          </button>
-        </div>
-
-        {/* หมวดหมู่ */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            หมวดหมู่
-          </label>
-          <select
-            value={category}
-            onChange={(e) => setCategory(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
-          >
-            <option value="A LA CARTE เส้น">A LA CARTE เส้น</option>
-            <option value="A LA CARTE ชุด">A LA CARTE ชุด</option>
-            <option value="A LA CARTE ข้าว">A LA CARTE ข้าว</option>
-            <option value="ALA กระทะร้อน">ALA กระทะร้อน</option>
-            <option value="ALA ซุป">ALA ซุป</option>
-            <option value="ALA หมู">ALA หมู</option>
-            <option value="ALA เนื้อวัว">ALA เนื้อวัว</option>
-            <option value="ALA เนื้อไก่">ALA เนื้อไก่</option>
-            <option value="เครื่องเคียง">เครื่องเคียง</option>
-          </select>
-        </div>
-
-        {/* ชื่อเมนู (อังกฤษ) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            ชื่อเมนู (อังกฤษ)
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
-            placeholder="เช่น Jap Chae"
-          />
-        </div>
-
-        {/* ชื่อเมนู (ไทย) */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            ชื่อเมนู (ไทย)
-          </label>
-          <input
-            type="text"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="w-full border rounded-md px-3 py-2"
-            placeholder="เช่น จับแช"
-          />
-        </div>
-
-        {/* รูปภาพ */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            รูปภาพ
-          </label>
-          <UploadImage
-            menuId={menu?.id}
-            onUploaded={(url) => setImageUrl(url)}
-            initialUrl={imageUrl}
-          />
-        </div>
-
-        {/* ปุ่มบันทึก */}
-        <div className="flex justify-end space-x-2 mt-4">
+    <>
+      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+        <div className="bg-white w-full max-w-lg p-6 rounded-2xl shadow-lg relative">
           <button
             onClick={onClose}
-            className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300"
+            className="absolute right-4 top-4 text-gray-500 hover:text-gray-800"
           >
-            ยกเลิก
+            ✕
           </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50"
-          >
-            {saving ? "กำลังบันทึก..." : "บันทึก"}
-          </button>
+
+          <h2 className="text-xl font-semibold mb-4">
+            {menu ? "แก้ไขเมนู" : "เพิ่มเมนูใหม่"}
+          </h2>
+
+          <div className="space-y-4">
+            {/* หมวดหมู่ */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                หมวดหมู่
+              </label>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              >
+                <option value="">-- เลือกหมวดหมู่ --</option>
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-xs text-gray-400">
+                * หมวดหมู่จะรวมเข้ากับของเดิมอัตโนมัติ
+              </p>
+            </div>
+
+            {/* ชื่อเมนู (อังกฤษ) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อเมนู (อังกฤษ)
+              </label>
+              <input
+                type="text"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="เช่น Jap Chae"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* ชื่อเมนู (ไทย) */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                ชื่อเมนู (ไทย)
+              </label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="เช่น จับแช"
+                className="w-full border rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+
+            {/* อัปโหลดรูป */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                รูปภาพเมนู
+              </label>
+              <UploadImage
+                onUploaded={(url) => setImageUrl(url)}
+                initialUrl={imageUrl}
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end mt-6 gap-2">
+            <button
+              onClick={onClose}
+              className="px-4 py-2 rounded-lg border text-gray-600 hover:bg-gray-100"
+            >
+              ยกเลิก
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50"
+            >
+              {saving ? "กำลังบันทึก..." : "บันทึก"}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+
+      {/*Toast popup */}
+      {toast && (
+        <Toast
+          type={toast.type}
+          message={toast.msg}
+          onClose={() => setToast(null)}
+        />
+      )}
+    </>
   );
 }
