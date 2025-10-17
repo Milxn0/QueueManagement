@@ -88,6 +88,27 @@ const formatDisplayDate = (iso: string | null) => {
   }).format(d);
 };
 
+const getCancelMeta = (r: RowLike | any) => {
+  const reason =
+    r?.cancelled_reason ?? r?.canceled_reason ?? r?.cancel_reason ?? null;
+
+  const at =
+    r?.cancelled_at ??
+    r?.canceled_at ??
+    r?.cancelledAt ??
+    r?.canceledAt ??
+    null;
+
+  const byName =
+    r?.cancelled_by?.name?.trim?.() ??
+    r?.canceled_by?.name?.trim?.() ??
+    r?.cancelled_by_name?.trim?.() ??
+    r?.canceled_by_name?.trim?.() ??
+    null;
+
+  return { reason, at, byName };
+};
+
 function tableText(r: RowLike) {
   const s = (r?.status ?? "").toLowerCase();
   if (s.includes("seated")) return "นั่งแล้ว";
@@ -130,6 +151,13 @@ export default function UserReservationDetailModal({
 
   // cancel form
   const [cancelReason, setCancelReason] = useState<string>("");
+  const [cancelByResolvedName, setCancelByResolvedName] = useState<
+    string | null
+  >(null);
+  const [cancelAtResolved, setCancelAtResolved] = useState<string | null>(null);
+  const [cancelReasonResolved, setCancelReasonResolved] = useState<
+    string | null
+  >(null);
 
   // success banner (ให้ UI เหมือนตัวอย่าง)
   const [ok, setOk] = useState<string | null>(null);
@@ -245,6 +273,60 @@ export default function UserReservationDetailModal({
     loadAssignedTables();
   }, [open, row?.id, loadAssignedTables]);
 
+  useEffect(() => {
+    if (!open || !row?.id) return;
+
+    (async () => {
+      try {
+        const supabase = (await import("@/lib/supabaseClient")).createClient();
+
+        // ดึงฟิลด์ยกเลิกล่าสุดจากตาราง reservations
+        const { data } = await supabase
+          .from("reservations")
+          .select("cancelled_at, cancelled_reason, cancelled_by_user_id")
+          .eq("id", row.id)
+          .maybeSingle();
+
+        const at = data?.cancelled_at ?? (row as any)?.cancelled_at ?? null;
+        const reason =
+          data?.cancelled_reason ?? (row as any)?.cancelled_reason ?? null;
+        setCancelAtResolved(at ?? null);
+        setCancelReasonResolved((reason ?? "").toString() || null);
+
+        // ถ้ามีชื่อจาก row อยู่แล้วก็ใช้เลย
+        const byNameRow =
+          (row as any)?.cancelled_by?.name?.trim?.() ??
+          (row as any)?.canceled_by?.name?.trim?.() ??
+          (row as any)?.cancelled_by_name?.trim?.() ??
+          (row as any)?.canceled_by_name?.trim?.() ??
+          null;
+
+        if (byNameRow) {
+          setCancelByResolvedName(byNameRow);
+          return;
+        }
+
+        // ถ้าไม่มีชื่อแต่มี user_id ให้ไปดึงชื่อจากตาราง users
+        const byId =
+          data?.cancelled_by_user_id ??
+          (row as any)?.cancelled_by_user_id ??
+          null;
+        if (byId) {
+          const { data: u } = await supabase
+            .from("users")
+            .select("name")
+            .eq("id", byId)
+            .maybeSingle();
+          setCancelByResolvedName((u?.name ?? "").trim() || null);
+        } else {
+          setCancelByResolvedName(null);
+        }
+      } catch {
+        setCancelByResolvedName(null);
+      }
+    })();
+  }, [open, row?.id]);
+
   const tCell = tableText(row || ({} as RowLike));
 
   const displayName =
@@ -255,7 +337,11 @@ export default function UserReservationDetailModal({
     String((row as any)?.user_name ?? "").trim() ||
     fallbackName?.trim?.() ||
     "—";
-
+  const {
+    reason: cancelReasonDisp,
+    at: cancelAtDisp,
+    byName: cancelByName,
+  } = getCancelMeta(row);
   const status = (row?.status ?? "").toLowerCase();
   const allowEdit = status === "waiting" || status === "confirmed";
   const canCancel = status === "waiting" || status === "confirmed";
@@ -426,17 +512,17 @@ export default function UserReservationDetailModal({
                 <div className="grid grid-cols-[auto,1fr] gap-x-3 gap-y-2">
                   <span className="text-rose-700/80">ผู้ยกเลิก :</span>
                   <span className="font-medium break-words">
-                    {row.cancelled_by?.name?.trim() || "—"}
+                    {cancelByResolvedName || "—"}
                   </span>
 
                   <span className="text-rose-700/80">สาเหตุ :</span>
                   <span className="font-medium whitespace-pre-line break-words">
-                    {row?.cancelled_reason?.trim?.() || "—"}
+                    {(cancelReasonResolved ?? "").trim() || "—"}
                   </span>
 
                   <span className="text-rose-700/80">ยกเลิกเมื่อ :</span>
                   <span className="font-medium">
-                    {formatDisplayDate(row?.cancelled_at ?? null)}
+                    {formatDisplayDate(cancelAtResolved)}
                   </span>
                 </div>
               </div>
