@@ -4,10 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabaseClient";
 
-const LINE_ADD_FRIEND_URL =
-  process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL || ""; 
-const LINE_OPEN_CHAT_URL =
-  process.env.NEXT_PUBLIC_LINE_OPEN_CHAT_URL || ""; 
+const LINE_ADD_FRIEND_URL = process.env.NEXT_PUBLIC_LINE_ADD_FRIEND_URL || "";
+const LINE_OPEN_CHAT_URL = process.env.NEXT_PUBLIC_LINE_OPEN_CHAT_URL || "";
 
 export default function LineLinkPage() {
   const sp = useSearchParams();
@@ -135,20 +133,32 @@ export default function LineLinkPage() {
                   )}
                 </li>
                 <li>
-                  พิมพ์ <span className="font-mono">Queue Code</span> ของคุณในแชท
+                  พิมพ์{" "}
+                  <span className="font-mono">
+                    Queue Code หรือคำว่า เชื่อมต่อ / Link / Connect
+                  </span>{" "}
+                  ของคุณในแชท
                 </li>
-                <li>กดปุ่ม “ยืนยัน/ล็อกอิน” ที่บอทส่งมาเพื่อกลับมาหน้านี้</li>
+                <li>กดปุ่ม “ยืนยัน/ล็อกอิน” ที่เพื่อกลับมาหน้านี้</li>
               </ol>
+              <div className="mt-6 rounded-xl border bg-gray-50 p-4">
+                <div className="mt-3 flex justify-center">
+                  <img
+                    src="/82d41241-dd1b-4d7d-868f-09e7f42e3246.jfif"
+                    alt="QR Code สำหรับติดตามสถานะคิว Line"
+                    className="w-48 h-48 object-contain rounded-lg shadow-md"
+                  />
+                </div>
+              </div>
               <div className="mt-3">
-                {LINE_OPEN_CHAT_URL && (
-                  <a
-                    href={LINE_OPEN_CHAT_URL}
-                    className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50"
-                    target="_blank"
-                  >
-                    เปิด LINE
-                  </a>
-                )}
+                <a
+                  href={LINE_OPEN_CHAT_URL || "https://lin.ee/AA8le5t"}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-medium hover:bg-gray-50"
+                >
+                  เปิด LINE
+                </a>
               </div>
             </div>
           ) : null}
@@ -197,7 +207,8 @@ export default function LineLinkPage() {
 
               {remainingMs === 0 && (
                 <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-800 text-sm">
-                  OTP หมดอายุแล้ว กรุณากลับไปที่แชท LINE แล้วกดลิงก์ยืนยันใหม่อีกครั้ง
+                  OTP หมดอายุแล้ว กรุณากลับไปที่แชท LINE
+                  แล้วกดลิงก์ยืนยันใหม่อีกครั้ง
                 </div>
               )}
             </div>

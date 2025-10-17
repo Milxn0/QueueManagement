@@ -86,7 +86,7 @@ export async function POST(req: NextRequest) {
     .update({ used_at: new Date().toISOString() })
     .eq("id", t.id);
 
-  // ✅ ออก OTP โดยไม่ต้องมี reservation_id ก็ได้
+  // อก OTP โดยไม่ต้องมี reservation_id ก็ได้
   await svc.from("line_link_sessions").insert({
     purpose: "otp",
     line_user_id: t.line_user_id,
