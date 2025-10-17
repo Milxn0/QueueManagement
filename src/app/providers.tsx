@@ -2,6 +2,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { AuthProvider } from "@/hooks/useAuth";
 import { createClient } from "@/lib/supabaseClient";
 
@@ -11,31 +12,39 @@ export default function Providers({ children }: { children: React.ReactNode }) {
 
 export function AuthAnalyticsHook() {
   const supabase = createClient();
+  const router = useRouter();
 
   useEffect(() => {
     if (!supabase?.auth?.onAuthStateChange) return;
 
     const { data: sub } = supabase.auth.onAuthStateChange(
-      async (_e: any, session: { user?: { id?: string } } | null) => {
-        const uid = session?.user?.id;
-        if (!uid) return;
-
+      async (event, session) => {
         try {
-          await supabase.rpc("log_user_login", {
-            p_user: uid,
-            p_action: "login",
+          await fetch("/api/auth/callback", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ event, session }),
           });
-        } catch {
-        }
+        } catch {/* เงียบไว้ */}
+        try {
+          const uid = session?.user?.id;
+          if (uid && event === "SIGNED_IN") {
+            await supabase.rpc("log_user_login", {
+              p_user: uid,
+              p_action: "login",
+            });
+          }
+        } catch {/* เงียบไว้ */}
+
+        router.refresh();
       }
     );
 
     return () => {
-      try {
-        sub?.subscription?.unsubscribe?.();
-      } catch {}
+      sub?.subscription?.unsubscribe?.();
     };
-  }, [supabase]);
+  }, [supabase, router]);
 
   return null;
 }
