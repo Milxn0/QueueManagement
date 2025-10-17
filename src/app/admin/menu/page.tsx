@@ -45,42 +45,42 @@ export default function AdminMenuPage() {
   };
 
   return (
-    <main className="max-w-6xl mx-auto px-6 py-10 space-y-6">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold text-gray-800">จัดการเมนูอาหาร 🍱</h1>
-        <button
-          onClick={() => {
-            setEditingMenu(null);
-            setShowForm(true);
-          }}
-          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
-        >
-          ➕ เพิ่มเมนู
-        </button>
-      </div>
-
-      {loading ? (
-        <p className="text-gray-500 text-sm">กำลังโหลดข้อมูล...</p>
-      ) : (
-        <MenuList menus={menus} onEdit={handleEdit} onDelete={handleDelete} />
-      )}
-
-      {/* ✅ Modal ฟอร์มเพิ่ม/แก้ไขเมนู */}
-      {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md relative animate-fadeIn">
-            <MenuForm menu={editingMenu} onClose={handleFormClose} />
-
-            {/* ปุ่มปิดมุมขวา */}
-            <button
-              onClick={() => setShowForm(false)}
-              className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl"
-            >
-              ✕
-            </button>
-          </div>
+    <div className="min-h-screen px-4 py-10 bg-gray-50 flex items-start justify-center">
+      <main className="max-w-6xl w-full px-6 py-10 bg-white shadow-xl rounded-2xl">
+        <div className="flex justify-between items-center mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">จัดการเมนูอาหาร</h1>
+          <button
+            onClick={() => {
+              setEditingMenu(null);
+              setShowForm(true);
+            }}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition"
+          >
+            เพิ่มเมนู
+          </button>
         </div>
-      )}
-    </main>
+
+        {loading ? (
+          <p className="text-gray-500 text-sm">กำลังโหลดข้อมูล...</p>
+        ) : (
+          <MenuList menus={menus} onEdit={handleEdit} onDelete={handleDelete} />
+        )}
+
+        {/* Modal ฟอร์มเพิ่ม/แก้ไขเมนู */}
+        {showForm && (
+          <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50">
+            <div className="bg-white rounded-2xl shadow-lg p-6 w-full max-w-md relative animate-fadeIn">
+              <MenuForm menu={editingMenu} onClose={handleFormClose} />
+              <button
+                onClick={() => setShowForm(false)}
+                className="absolute top-3 right-3 text-gray-500 hover:text-gray-700 text-xl"
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
