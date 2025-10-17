@@ -106,9 +106,9 @@ export default function Navbar() {
             />
 
             <NavLink
-              href="/menu"
+              href="/user/menu"
               label="เมนู"
-              active={pathname.startsWith("/menu")}
+              active={pathname.startsWith("/user/menu")}
             />
           </div>
         </div>
