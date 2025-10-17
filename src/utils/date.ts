@@ -26,23 +26,39 @@ export function monthRangeFromYYYYMM(ym: string) {
 }
 
 export function makeRangeISO(
-  mode: "day" | "month" | "year",
+  mode: "all" | "day" | "month" | "year",
   dayStr: string,
   monthStr: string,
   yearStr: string
 ) {
+  //โหมดทั้งหมด (Export ข้อมูลทั้งตาราง)
+  if (mode === "all") {
+    const start = new Date(1900, 0, 1, 0, 0, 0, 0); // 1900-01-01 00:00
+    const end = new Date(2100, 11, 31, 23, 59, 59, 999); // 2100-12-31 23:59
+    return {
+      start: start.toISOString(),
+      end: end.toISOString(),
+      label: "ทั้งหมด",
+    };
+  }
+
+  //โหมดรายวัน
   if (mode === "day") {
     const [Y, M, D] = dayStr.split("-").map(Number);
     const start = new Date(Y, (M ?? 1) - 1, D ?? 1, 0, 0, 0, 0);
     const end = new Date(Y, (M ?? 1) - 1, D ?? 1, 23, 59, 59, 999);
     return { start: start.toISOString(), end: end.toISOString(), label: dayStr };
   }
+
+  //โหมดรายเดือน
   if (mode === "month") {
     const [Y, M] = monthStr.split("-").map(Number);
     const start = new Date(Y, (M ?? 1) - 1, 1, 0, 0, 0, 0);
     const end = new Date(Y, M ?? 1, 0, 23, 59, 59, 999);
-    return { start: start.toISOString(), end: end.toISOString(), label: `${monthStr}` };
+    return { start: start.toISOString(), end: end.toISOString(), label: monthStr };
   }
+
+  //โหมดรายปี
   const Y = Number(yearStr);
   const start = new Date(Y, 0, 1, 0, 0, 0, 0);
   const end = new Date(Y, 11, 31, 23, 59, 59, 999);
