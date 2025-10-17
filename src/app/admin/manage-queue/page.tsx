@@ -304,15 +304,26 @@ export default function ManageQueuesPage() {
   const displayRows = useMemo<ReservationRow[]>(() => {
     const base = Array.isArray(rows) ? rows : [];
     const term = norm(search);
-    if (!term) return base;
-    return base.filter((r) => {
+
+    // กรองตามแท็บ:ให้เหลือเฉพาะ cancelled
+    const filteredByTab =
+      filter === "cancelled"
+        ? base.filter(
+            (r) => String(r?.status ?? "").toLowerCase() === "cancelled"
+          )
+        : base;
+
+    if (!term) return filteredByTab;
+
+    // กรองค้นหา
+    return filteredByTab.filter((r) => {
       const u = pickUser(r);
       const values = [r.queue_code, u?.name, u?.phone, u?.email, r.status].map(
         norm
       );
       return values.some((v) => v.includes(term));
     });
-  }, [rows, search]);
+  }, [rows, search, filter]);
 
   // ---------- Realtime ----------
   const refetchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
