@@ -59,7 +59,7 @@ function TablePickerBase({
             key={no}
             onClick={() =>
               setPicked((arr) =>
-                arr.length === 1 && arr[0] === no ? [] : [no]
+                arr.includes(no) ? arr.filter((x) => x !== no) : [...arr, no]
               )
             }
             disabled={isOthers}

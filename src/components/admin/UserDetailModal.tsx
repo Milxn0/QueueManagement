@@ -135,25 +135,71 @@ export default function UserDetailModal({
     setBusy(true);
     try {
       const payload: Partial<AppUser> = { ...form };
+
+      //โดยเคลียร์เบอร์ให้ว่างถ้าเบอร์ซ้ำ
+      const retryClearPhone = async () => {
+        const payload2 = { ...payload, phone: null };
+        // อัพเดตฟอร์มให้ UI เห็นด้วย
+        setForm((f) => ({ ...f, phone: "" }));
+
+        if (isSelf) {
+          const { error } = await supabase
+            .from("users")
+            .update(payload2)
+            .eq("id", user!.id);
+          if (error) throw error;
+        } else {
+          const res2 = await fetch("/api/admin/users/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ id: user!.id, payload: payload2 }),
+          });
+          const json2 = await res2.json();
+          if (!res2.ok) throw new Error(json2?.error || "บันทึกไม่สำเร็จ");
+        }
+        setMsg("บันทึกสำเร็จ");
+        onUpdated?.();
+      };
+
+      // --- อัพเดตรอบแรก ---
       if (isSelf) {
-        // เจ้าของบัญชีแก้ของตัวเอง
         const { error } = await supabase
           .from("users")
           .update(payload)
-          .eq("id", user.id);
-        if (error) throw error;
+          .eq("id", user!.id);
+        if (error) {
+          const msg = String(error.message || "");
+          // โดน unique ลองเคลียร์แล้วอัพเดตอีกครั้ง
+          if (/users_phone_key|duplicate key|23505/i.test(msg)) {
+            await retryClearPhone();
+          } else {
+            throw error;
+          }
+        } else {
+          setMsg("บันทึกข้อมูลผู้ใช้สำเร็จ");
+          onUpdated?.();
+        }
       } else {
         const res = await fetch("/api/admin/users/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           credentials: "include",
-          body: JSON.stringify({ id: user.id, payload }),
+          body: JSON.stringify({ id: user!.id, payload }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json?.error || "บันทึกไม่สำเร็จ");
+        if (!res.ok) {
+          const json = await res.json().catch(() => ({}));
+          const msg = String(json?.error || "");
+          if (/users_phone_key|duplicate key|23505/i.test(msg)) {
+            await retryClearPhone();
+          } else {
+            throw new Error(msg || "บันทึกไม่สำเร็จ");
+          }
+        } else {
+          setMsg("บันทึกข้อมูลผู้ใช้สำเร็จ");
+          onUpdated?.();
+        }
       }
-      setMsg("บันทึกข้อมูลผู้ใช้สำเร็จ");
-      onUpdated?.();
     } catch (e: any) {
       setErr(e?.message || "บันทึกไม่สำเร็จ");
     } finally {
@@ -221,7 +267,7 @@ export default function UserDetailModal({
         .eq("user_id", user.id);
       if (reassignErr) throw reassignErr;
 
-      // 2) ลบจาก Supabase 
+      // 2) ลบจาก Supabase
       const tryDeleteAuth = async () => {
         const fallback = await fetch("/api/admin/users/delete", {
           method: "POST",

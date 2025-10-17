@@ -572,35 +572,52 @@ export default function ReservationDetailModal({
     try {
       setDelBusy(true);
       setDelErr(null);
+
+      // 1) เคลียร์การจับคู่โต๊ะเดิม (คืนโต๊ะให้ระบบ)
       const { error: delMapsErr } = await supabase
         .from("reservation_tables")
         .delete()
         .eq("reservation_id", row.id);
       if (delMapsErr) throw delMapsErr;
 
+      // 2) (ถ้ามีบิล) ไม่ลบ แต่ทำให้เป็น void แทน
       const { data: bills } = await supabase
         .from("bills")
-        .select("id")
+        .select("id,status")
         .eq("reservation_id", row.id);
       const billIds = (bills ?? []).map((b: any) => b.id);
       if (billIds.length > 0) {
-        const { error: delItemsErr } = await supabase
-          .from("bill_items")
-          .delete()
-          .in("bill_id", billIds);
-        if (delItemsErr) throw delItemsErr;
-        const { error: delBillsErr } = await supabase
+        const { error: voidBillsErr } = await supabase
           .from("bills")
-          .delete()
+          .update({ status: "void" })
           .in("id", billIds);
-        if (delBillsErr) throw delBillsErr;
+        if (voidBillsErr) throw voidBillsErr;
       }
 
-      const { error } = await supabase
+      // 3) append-only log
+      await supabase.from("queue_logs").insert({
+        reservation_id: row.id,
+        status: "deleted",
+        note: "ลบการจองโดยผู้ดูแลระบบ",
+      });
+
+      // 4) ไม่ลบแถว reservations เพื่อเก็บความเชื่อมโยงกับ queue_logs
+      const {
+        data: { user: me },
+      } = await supabase.auth.getUser();
+      const now = new Date().toISOString();
+      const { error: updErr } = await supabase
         .from("reservations")
-        .delete()
+        .update({
+          status: "cancelled",
+          cancelled_at: now,
+          cancelled_reason: "ลบการจองโดยผู้ดูแลระบบ",
+          cancelled_by_user_id: me?.id ?? null,
+          is_delete: true,
+          table_id: null, 
+        })
         .eq("id", row.id);
-      if (error) throw error;
+      if (updErr) throw updErr;
 
       onUpdated?.();
       setConfirmDelOpen(false);
@@ -1047,6 +1064,17 @@ export default function ReservationDetailModal({
                           setBusy(false);
                           return;
                         }
+
+                        await supabase
+                          .from("reservation_tables")
+                          .delete()
+                          .eq("reservation_id", row.id);
+
+                        await supabase
+                          .from("reservations")
+                          .update({ table_id: null })
+                          .eq("id", row.id);
+
                         const res = await fetch(
                           `/api/admin/reservations/${row.id}/assign-tables`,
                           {

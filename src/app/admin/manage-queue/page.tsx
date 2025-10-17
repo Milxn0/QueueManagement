@@ -87,6 +87,9 @@ export default function ManageQueuesPage() {
   const [rows, setRows] = useState<ReservationRow[]>([]);
   const [rowsLoading, setRowsLoading] = useState(true);
 
+  const dropDeleted = <T extends Record<string, any>>(arr: T[]) =>
+    (Array.isArray(arr) ? arr : []).filter((r) => r?.is_delete !== true);
+
   const fetchReservations = useCallback(async () => {
     setRowsLoading(true);
 
@@ -156,6 +159,7 @@ export default function ManageQueuesPage() {
           status,
           user_id,
           table_id,
+          is_delete,
           users:users(name,phone,email),
           tbl:tables(table_name)
         `
@@ -188,7 +192,8 @@ export default function ManageQueuesPage() {
           partysize,
           status,
           user_id,
-          table_id
+          table_id,
+          is_delete
         `
           )
           .order("reservation_datetime", { ascending: false })
@@ -267,7 +272,7 @@ export default function ManageQueuesPage() {
       });
 
       if (list1.length > 0 && !allWaiting(list1)) {
-        setRows(normalizeRowsUser(list1).slice(0, 200));
+        setRows(dropDeleted(normalizeRowsUser(list1)).slice(0, 200));
         return;
       }
 
@@ -284,18 +289,18 @@ export default function ManageQueuesPage() {
       const merged = Array.from(map.values());
 
       if (merged.length > 0 && !allWaiting(merged)) {
-        setRows(normalizeRowsUser(merged).slice(0, 200));
+        setRows(dropDeleted(normalizeRowsUser(merged)).slice(0, 200));
         return;
       }
 
       // 3) แผนสำรองสุดท้าย: ดึงตรงจาก Supabase (ได้ทุกสถานะจริง ๆ)
       const supa = await supaAll();
-      setRows(normalizeRowsUser(supa).slice(0, 200));
+      setRows(dropDeleted(normalizeRowsUser(supa)).slice(0, 200));
     } catch (err) {
       console.error("fetchReservations error:", err);
       // 4) ถ้า API พัง ให้ fallback Supabase ทันที
       const supa = await supaAll();
-      setRows(normalizeRowsUser(supa).slice(0, 200));
+      setRows(dropDeleted(normalizeRowsUser(supa)).slice(0, 200));
     } finally {
       setRowsLoading(false);
     }
@@ -626,6 +631,7 @@ export default function ManageQueuesPage() {
           occupied={occupied}
           readOnly
           fromManageQueue
+          onUpdated={scheduleRefetch}
         />
       </main>
     </div>
