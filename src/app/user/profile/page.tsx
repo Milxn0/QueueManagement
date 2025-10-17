@@ -25,6 +25,7 @@ export default function ProfilePage() {
   const [user, setUser] = useState<UserRowExt | null>(null);
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
+  const [showConfirm, setShowConfirm] = useState(false);
 
   // flags หลัง redirect จาก LINE
   useEffect(() => {
@@ -37,6 +38,15 @@ export default function ProfilePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs]);
 
+  useEffect(() => {
+    if (!err && !msg) return;
+    const t = setTimeout(() => {
+      setErr(null);
+      setMsg(null);
+    }, 5000);
+    return () => clearTimeout(t);
+  }, [err, msg]);
+  
   // โหลดโปรไฟล์ + สถานะ LINE (อ่านจาก line_links)
   useEffect(() => {
     (async () => {
@@ -149,18 +159,21 @@ export default function ProfilePage() {
     }
   }
 
+  function cancelUnlink() {
+    setShowConfirm(false);
+  }
+  async function confirmUnlink() {
+    setShowConfirm(false);
+    await unlinkLine();
+  }
   // ยกเลิกเชื่อมต่อ LINE
   async function unlinkLine() {
     if (!user) return;
 
-    if (typeof window !== "undefined") {
-      const ok = window.confirm("ยืนยันที่จะยกเลิกการเชื่อมต่อ LINE หรือไม่?");
-      if (!ok) return;
-    }
-
     setSaving(true);
     setErr(null);
     setMsg(null);
+
     try {
       const res = await fetch("/api/line/unlink", { method: "POST" });
       if (!res.ok) {
@@ -174,7 +187,7 @@ export default function ProfilePage() {
         throw new Error(detail || "ยกเลิกเชื่อมต่อ LINE ไม่สำเร็จ");
       }
 
-      // รีเฟรชข้อมูล (users + line_links)
+      // รีเฟรชข้อมูล
       const { data: userRow, error } = await supabase
         .from("users")
         .select("id, email, name, phone")
@@ -192,14 +205,19 @@ export default function ProfilePage() {
         ...(userRow as any),
         line_user_id: linkRow?.line_user_id ?? null,
       });
-      setMsg("ยกเลิกเชื่อมต่อ LINE สำเร็จ");
+      if (typeof window !== "undefined") {
+        const u = new URL(window.location.href);
+        u.searchParams.set("line_unlinked", "1");
+        u.searchParams.delete("error");
+        router.replace(`${u.pathname}?${u.searchParams.toString()}`);
+        router.refresh();
+      }
     } catch (e: any) {
       setErr(e?.message || "ยกเลิกเชื่อมต่อ LINE ไม่สำเร็จ");
     } finally {
       setSaving(false);
     }
   }
-
   const lineLinked = !!user?.line_user_id;
 
   return (
@@ -370,7 +388,7 @@ export default function ProfilePage() {
                 </div>
 
                 <button
-                  onClick={unlinkLine}
+                  onClick={() => setShowConfirm(true)}
                   disabled={saving}
                   className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   title="Unlink LINE"
@@ -423,6 +441,46 @@ export default function ProfilePage() {
             )}
           </div>
         </>
+      )}
+      {showConfirm && (
+        <div
+          className="fixed inset-0 z-[60] flex items-center justify-center"
+          aria-modal="true"
+          role="dialog"
+        >
+          {/* backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-[1px]"
+            onClick={cancelUnlink}
+          />
+          {/* dialog */}
+          <div className="relative z-[61] w-full max-w-md rounded-2xl border border-gray-200 bg-white shadow-2xl">
+            <div className="p-5">
+              <h3 className="text-base font-semibold text-gray-900">
+                ยืนยันการยกเลิกเชื่อมต่อ LINE?
+              </h3>
+              <p className="mt-1 text-sm text-gray-600">
+                หลังจากยกเลิก คุณจะไม่ได้รับการแจ้งเตือนผ่าน LINE
+                จนกว่าจะเชื่อมต่อใหม่
+              </p>
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 p-4">
+              <button
+                onClick={cancelUnlink}
+                className="rounded-xl border border-gray-300 bg-white px-4 py-2 text-sm font-medium hover:bg-gray-50"
+              >
+                ยกเลิก
+              </button>
+              <button
+                onClick={confirmUnlink}
+                disabled={saving}
+                className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-rose-700 disabled:opacity-50"
+              >
+                ยืนยันยกเลิก
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </main>
   );
