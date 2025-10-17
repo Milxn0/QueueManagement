@@ -8,6 +8,22 @@ export default function LoginPage() {
   const supabase = createClient();
   const router = useRouter();
 
+  async function syncSession(
+    event: "SIGNED_IN" | "TOKEN_REFRESHED" | "SIGNED_OUT",
+    session?: any
+  ) {
+    try {
+      await fetch("/api/auth/callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ event, session }),
+      });
+    } catch {
+      // เงียบไว้ ไม่ขวาง flow
+    }
+  }
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -30,6 +46,9 @@ export default function LoginPage() {
       setErr(error.message);
       return;
     }
+    
+    await syncSession("SIGNED_IN", data.session);
+    router.refresh();
 
     const userId = data.user?.id!;
     const { data: p } = await supabase
