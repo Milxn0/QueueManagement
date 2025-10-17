@@ -19,7 +19,7 @@ export default function MenuPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("ทั้งหมด");
 
-  //Custom order ของหมวด A LA CARTE
+  // ✅ Custom order ของหมวด A LA CARTE
   const ALA_CATEGORIES = [
     "A LA CARTE เส้น",
     "A LA CARTE ข้าว",
@@ -29,7 +29,7 @@ export default function MenuPage() {
     "A LA CARTE กระทะร้อน",
   ];
 
-  // โหลดข้อมูลจาก Supabase
+  // ✅ โหลดข้อมูลจาก Supabase
   useEffect(() => {
     const loadMenus = async () => {
       try {
@@ -50,7 +50,7 @@ export default function MenuPage() {
     loadMenus();
   }, [supabase]);
 
-  //Normalize Category (ตัดช่องว่าง/แปลงเป็นตัวใหญ่)
+  // ✅ Normalize Category
   const normalizedMenus = useMemo(() => {
     return menus.map((m) => ({
       ...m,
@@ -58,7 +58,7 @@ export default function MenuPage() {
     }));
   }, [menus]);
 
-  //รวมหมวดทั้งหมด + เรียงลำดับตาม Custom order
+  // ✅ รวมหมวดทั้งหมด + เรียงลำดับตาม Custom order
   const allCategories = useMemo(() => {
     const cats = Array.from(new Set(normalizedMenus.map((m) => m.category)));
 
@@ -76,14 +76,14 @@ export default function MenuPage() {
       return a.localeCompare(b, "th");
     });
 
-    // “เพิ่มเติม” จะอยู่ท้ายสุด
+    // ✅ “เพิ่มเติม” จะอยู่ท้ายสุด
     const extras = sortedCats.filter((c) => c.includes("เพิ่มเติม"));
     const rest = sortedCats.filter((c) => !c.includes("เพิ่มเติม"));
 
     return ["ทั้งหมด", ...rest, ...extras];
   }, [normalizedMenus]);
 
-  // Filter ตามหมวดและคำค้นหา
+  // ✅ Filter ตามหมวดและคำค้นหา
   const filteredMenus = useMemo(() => {
     let filtered = normalizedMenus;
     if (activeCategory !== "ทั้งหมด") {
@@ -100,7 +100,7 @@ export default function MenuPage() {
     return filtered;
   }, [normalizedMenus, activeCategory, searchTerm]);
 
-  // Group ตามหมวด
+  // ✅ Group ตามหมวด
   const grouped = useMemo(() => {
     return filteredMenus.reduce((acc: Record<string, MenuItem[]>, item) => {
       const cat = item.category || "ไม่ระบุหมวด";
@@ -110,6 +110,15 @@ export default function MenuPage() {
     }, {});
   }, [filteredMenus]);
 
+  // ✅ แยกหมวด ALA กับหมวดอื่น
+  const alaGroups = Object.keys(grouped).filter((cat) =>
+    ALA_CATEGORIES.includes(cat)
+  );
+  const otherGroups = Object.keys(grouped).filter(
+    (cat) => !ALA_CATEGORIES.includes(cat)
+  );
+
+  // ✅ Loading / Error state
   if (loading)
     return (
       <main className="max-w-5xl mx-auto px-6 py-12 text-center text-gray-500">
@@ -124,14 +133,7 @@ export default function MenuPage() {
       </main>
     );
 
-  // แยกหมวด ALA กับหมวดอื่น
-  const alaGroups = Object.keys(grouped).filter((cat) =>
-    ALA_CATEGORIES.includes(cat)
-  );
-  const otherGroups = Object.keys(grouped).filter(
-    (cat) => !ALA_CATEGORIES.includes(cat)
-  );
-
+  // ✅ UI หลัก
   return (
     <main className="max-w-6xl mx-auto px-6 py-10 space-y-10">
       {/* Header */}
@@ -162,7 +164,7 @@ export default function MenuPage() {
             </button>
           ))}
 
-        {/*ปุ่ม “เพิ่มเติม” อยู่ขวาสุดเสมอ */}
+        {/* ปุ่ม “เพิ่มเติม” อยู่ขวาสุดเสมอ */}
         {allCategories.includes("เพิ่มเติม") && (
           <button
             onClick={() => setActiveCategory("เพิ่มเติม")}
@@ -188,13 +190,9 @@ export default function MenuPage() {
         />
       </div>
 
-      {/*Section: A LA CARTE */}
+      {/* Section: A LA CARTE */}
       {alaGroups.length > 0 && (
         <section className="space-y-8">
-          <h2 className="text-3xl font-bold text-indigo-200 border-b-2 border-indigo-100 pb-3 text-center">
-            
-          </h2>
-
           {ALA_CATEGORIES.map(
             (cat) =>
               grouped[cat] && (
@@ -242,13 +240,9 @@ export default function MenuPage() {
         </section>
       )}
 
-      {/*Section: หมวดอื่นๆ (อยู่ล่างสุด) */}
+      {/* Section: หมวดอื่นๆ */}
       {otherGroups.length > 0 && (
         <section className="space-y-8">
-          <h2 className="text-3xl font-bold text-gray-700 border-b-2 border-gray-200 pb-3 text-center mt-10">
-            
-          </h2>
-
           {otherGroups.map((cat) => (
             <div key={cat} className="space-y-4">
               <h3 className="text-2xl font-semibold text-gray-700 border-b pb-2">
