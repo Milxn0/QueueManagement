@@ -649,8 +649,8 @@ export default function ReservationDetailModal({
 
       const t = new Date(targetISO).getTime();
       const e = new Date(earliest.reservation_datetime as string).getTime();
-      const diffMin = Math.abs(t - e) / (60 * 1000);
-
+      const diffMin = (t - e) / (60 * 1000);
+      if (diffMin <= 0) return true;
       if (diffMin <= ASSIGN_ALLOW_DIFF_MIN) return true;
 
       showError(
