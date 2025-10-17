@@ -62,11 +62,10 @@ export default function Navbar() {
     <Link
       href={href}
       onClick={onClick}
-      className={`px-3 py-2 rounded-lg text-[15px] ${
-        active
+      className={`px-3 py-2 rounded-lg text-[15px] ${active
           ? "font-semibold text-indigo-700 bg-indigo-50 border border-indigo-100"
           : "font-medium hover:bg-gray-50"
-      }`}
+        }`}
     >
       {label}
     </Link>
@@ -191,6 +190,12 @@ export default function Navbar() {
                 href="/user/reservation"
                 label="จองคิว"
                 active={pathname.startsWith("/user/reservation")}
+                onClick={() => setMenuOpen(false)}
+              />
+              <NavLink
+                href="/menu"
+                label="เมนู"
+                active={pathname.startsWith("/menu")}
                 onClick={() => setMenuOpen(false)}
               />
               <NavLink
