@@ -183,7 +183,7 @@ export default function MenuPage() {
       <div className="flex justify-center">
         <input
           type="text"
-          placeholder="🔍 ค้นหาเมนู (เช่น บูลโกกิ, ซุป, ไก่)..."
+          placeholder="ค้นหาเมนู (เช่น บูลโกกิ, ซุป, ไก่)..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
           className="w-full sm:w-96 border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
