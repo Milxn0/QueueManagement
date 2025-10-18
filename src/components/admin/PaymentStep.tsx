@@ -24,7 +24,7 @@ type Props = {
   onSaved: (payload: {
     paymentMethod: "cash" | "card" | "qr" | "transfer" | "e-wallet" | null;
     selectedPackage: number | null;
-    people: number; // ผู้ใหญ่
+    people: number;
     alaItems: AlaItem[];
     totals: { pkg: number; ala: number; sum: number };
     children: number;
@@ -91,7 +91,7 @@ export default function PaymentStep({
 
   const lastReservationIdRef = useRef<string | null>(null);
 
-  // ⬇️ โหลด partysize จาก DB เมื่อเปิด และ subscribe อัปเดตแบบเรียลไทม์
+  // โหลด partysize จาก DB เมื่อเปิด และ subscribe อัปเดตแบบเรียลไทม์
   useEffect(() => {
     if (!reservationId || !open) return;
     let mounted = true;
@@ -145,7 +145,7 @@ export default function PaymentStep({
         const saved = JSON.parse(raw) as { people?: number; children?: number };
         const p = Math.max(1, Number(saved?.people) || 1);
         const c = Math.max(0, Number(saved?.children) || 0);
-        setPeople(p); // จะถูก override โดย DB ถ้ามี (ด้านบน)
+        setPeople(p); 
         setChildren(c);
       } else {
         setPeople(peopleInitial > 0 ? peopleInitial : 1);
@@ -535,7 +535,7 @@ export default function PaymentStep({
         </section>
       </div>
 
-      {/* Footer (sticky) */}
+      {/* Footer */}
       <div className="sticky bottom-0 flex flex-none items-center gap-3 border-t bg-white/70 px-4 py-3 backdrop-blur">
         <div className="mr-auto text-sm leading-tight">
           <div className="font-semibold">รวมทั้งสิ้น {currency(totals.sum)}</div>

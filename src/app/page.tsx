@@ -53,7 +53,6 @@ export default function HomePage() {
         // เวลาอ้างอิง
         const now = new Date();
 
-        // ผ่อนผัน 10 นาที
         const grace = new Date(now.getTime() - 10 * 60 * 1000);
         const graceIso = grace.toISOString();
 
@@ -87,7 +86,7 @@ export default function HomePage() {
           if (mounted) setMyReservations([]);
         }
 
-        // 3) คิวถัดไป (เฉพาะ confirmed) — หน่วง 10 นาที
+        // 3) คิวถัดไป (เฉพาะ confirmed)
         const { data: conf, error: confErr } = await supabase
           .from("reservations")
           .select(
@@ -279,7 +278,7 @@ export default function HomePage() {
         )}
       </section>
 
-      {/* คิวทั้งหมด (เฉพาะที่ยืนยันแล้ว) */}
+      {/* คิวทั้งหมด ) */}
       <section className="space-y-4">
         <h2 className="text-lg font-medium">คิวทั้งหมด</h2>
 
@@ -296,7 +295,7 @@ export default function HomePage() {
             <ul className="divide-y rounded-xl border overflow-hidden">
               {pagedQueues.map((q, i) => {
                 const isMine = q.user_id === userId;
-                const globalIndex = (page - 1) * PAGE_SIZE + i + 1; // ลำดับคิวรวมทุกหน้า
+                const globalIndex = (page - 1) * PAGE_SIZE + i + 1; 
                 return (
                   <li
                     key={q.id}
@@ -306,7 +305,7 @@ export default function HomePage() {
                     ].join(" ")}
                   >
                     <div className="flex items-center gap-3">
-                      {/* ลำดับคิว 1-based (รวมทุกหน้า) */}
+                      {/* ลำดับคิวรวมทุกหน้า */}
                       <span
                         className={[
                           "inline-flex h-7 w-7 items-center justify-center rounded-full border text-sm font-semibold",

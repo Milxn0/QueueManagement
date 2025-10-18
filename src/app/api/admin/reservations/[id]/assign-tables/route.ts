@@ -90,7 +90,7 @@ export async function POST(
       );
     }
 
-    // 4) ตรวจชนเวลาตามเวลานั่งจริง (DINE_MINUTES) + ดูเฉพาะ mapping ที่ยัง active
+    // 4) ตรวจชนเวลาตามเวลานั่งจริง ดูเฉพาะ mapping ที่ยัง active
     const DINE_MIN_MS =
       Number(process.env.NEXT_PUBLIC_DINE_MINUTES || 90) * 60 * 1000;
     const myStart = new Date(base.getTime() - DINE_MIN_MS);
@@ -113,7 +113,7 @@ export async function POST(
       )
       .in("table_id", pickedIds)
       .neq("reservation_id", reservationId)
-      .is("released_at", null) // ⬅️ เฉพาะ mapping ที่ยัง active
+      .is("released_at", null) 
       .is("reservations.cancelled_at", null)
       .in("reservations.status", [
         "seated",
@@ -121,7 +121,7 @@ export async function POST(
         "confirm",
         "Seated",
         "Confirmed",
-        "Confirm", // ⬅️ ไม่รวม paid
+        "Confirm",
       ])
       .gte("reservations.reservation_datetime", fetchStart)
       .lte("reservations.reservation_datetime", fetchEnd);
@@ -163,8 +163,6 @@ export async function POST(
     }
 
     // 5) ซิงค์ reservation_tables
-    //   - ลบเฉพาะ mapping ที่ "ยัง active" และไม่อยู่ในชุดใหม่
-    //   - แทรก mapping ใหม่ด้วย released_at = null
     const { data: currentMaps, error: mapErr } = await sb
       .from("reservation_tables")
       .select("table_id, released_at")

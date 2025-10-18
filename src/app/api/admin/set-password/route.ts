@@ -35,7 +35,7 @@ export async function POST(req: Request) {
       }
     );
 
-    // ตรวจสิทธิ์ผู้เรียก → ต้องเป็น admin
+    // ตรวจสิทธิ์ผู้เรียก ต้องเป็น admin
     const { data: auth } = await supabase.auth.getUser();
     const caller = auth.user;
     if (!caller) {

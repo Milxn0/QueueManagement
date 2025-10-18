@@ -10,7 +10,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "missing id/payload" }, { status: 400 });
   }
 
-  // 1) ตรวจสิทธิ์ผู้เรียก (ต้องเป็น admin)
+  // 1) ตรวจสิทธิ์ผู้เรียก ต้องเป็น admin
   const cookieStore = await cookies();
   const supabaseAuth = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

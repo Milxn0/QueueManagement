@@ -12,7 +12,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "missing id" }, { status: 400 });
     }
 
-    // 1) ตรวจสิทธิ์ผู้เรียก (ต้องเป็น admin)
+    // 1) ตรวจสิทธิ์ผู้เรียก ต้องเป็น admin
     const cookieStore = await cookies();
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,14 +46,14 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "ต้องเป็นแอดมินเท่านั้น" }, { status: 403 });
     }
 
-    // 2) ลบข้อมูลใน public.users ก่อน (กันปัญหา FK)
+    // 2) ลบข้อมูลใน public.users 
     const admin = createServiceClient();
     const { error: dbErr } = await admin.from("users").delete().eq("id", id);
     if (dbErr) {
       return NextResponse.json({ error: dbErr.message }, { status: 400 });
     }
 
-    // 3) ลบผู้ใช้ในระบบ Auth (GoTrue)
+    // 3) ลบผู้ใช้ในระบบ Auth
     const { error: authErr } = await admin.auth.admin.deleteUser(id);
     if (authErr) {
       return NextResponse.json(

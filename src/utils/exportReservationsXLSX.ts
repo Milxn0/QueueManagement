@@ -33,7 +33,7 @@ export async function exportReservationsXLSX(
       return;
     }
 
-    //สร้างแถวข้อมูล (พร้อมชื่อคอลัมน์ภาษาไทย)
+    //สร้างแถวข้อมูล 
     const rows = list.map((r, index) => ({
       ลำดับ: index + 1,
       ID: r.id,
@@ -60,13 +60,7 @@ export async function exportReservationsXLSX(
       วันที่สร้างรายการ: new Date(r.created_at).toLocaleString("th-TH"),
     }));
 
-    //สร้าง Worksheet
     const worksheet = XLSX.utils.json_to_sheet(rows);
-    //ตั้งค่าให้ข้อความในเซลล์ขึ้นบรรทัดใหม่อัตโนมัติ
-    // for (const cell in worksheet) {
-    //     if (cell[0] === "!") continue;
-    //     worksheet[cell].s = { alignment: { wrapText: true, vertical: "top" } };
-    // }
 
     //จัดขนาดคอลัมน์ให้อัตโนมัติ
     const colWidths = Object.keys(rows[0]).map((key) => ({
@@ -94,7 +88,7 @@ export async function exportReservationsXLSX(
     const wbout = XLSX.write(workbook, {
       bookType: "xlsx",
       type: "array",
-      cellStyles: true, //ต้องเปิดเพื่อให้ style ทำงาน
+      cellStyles: true, 
     });
 
     const blob = new Blob([wbout], {

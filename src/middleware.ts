@@ -93,7 +93,6 @@ export async function middleware(req: NextRequest) {
 
   // ตรวจสิทธิ์ตาม role
   if (!canAccess(pathname, role)) {
-    // ไม่อนุญาต → เด้งกลับหน้าแรก
     const url = req.nextUrl.clone();
     url.pathname = "/";
     const redirect = NextResponse.redirect(url);

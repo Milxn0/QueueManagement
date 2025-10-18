@@ -20,7 +20,6 @@ export default function LoginPage() {
         body: JSON.stringify({ event, session }),
       });
     } catch {
-      // เงียบไว้ ไม่ขวาง flow
     }
   }
 
@@ -46,7 +45,7 @@ export default function LoginPage() {
       setErr(error.message);
       return;
     }
-    
+
     await syncSession("SIGNED_IN", data.session);
     router.refresh();
 

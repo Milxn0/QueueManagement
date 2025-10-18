@@ -13,7 +13,6 @@ type RowLike = {
   partysize: number | string | null;
   comment: string | null;
   status: string | null;
-  // ใช้สำหรับดึงชื่อผู้จอง
   users?: { name: string | null } | null;
   user?: { name: string | null } | null;
   name?: string | null;
@@ -38,7 +37,7 @@ const formatDate = (iso: string | null) => {
   }).format(d);
 };
 
-// ชื่อผู้จอง (พยายามรองรับทุกเคสของฟิลด์)
+// ชื่อผู้จอง
 const reserverName = (r: RowLike) =>
   r.users?.name?.trim() ||
   r.user?.name?.trim() ||

@@ -159,7 +159,7 @@ export default function UserReservationDetailModal({
     string | null
   >(null);
 
-  // success banner (ให้ UI เหมือนตัวอย่าง)
+  // success banner 
   const [ok, setOk] = useState<string | null>(null);
   const displayPhone =
     (

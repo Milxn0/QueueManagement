@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
   try {
     const rawBody = await req.text();
 
-    // ตรวจลายเซ็น (LINE ใช้ HMAC SHA256)
+    // ตรวจลายเซ็น 
     const sig = req.headers.get("x-line-signature") || "";
     if (!verifySignature(rawBody, sig)) {
       return new NextResponse("Bad signature", { status: 401 });
@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       const text = (ev.message.text as string).trim();
       const lineUserId = ev.source?.userId as string;
 
-      // 0) ผู้ใช้พิมพ์ "เชื่อมต่อ" (ไม่มี Queue Code)
+      // 0) ผู้ใช้พิมพ์ "เชื่อมต่อ" 
       if (LINK_RE.test(text)) {
         const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
         const nonce = crypto.randomBytes(16).toString("hex");
@@ -150,7 +150,7 @@ export async function POST(req: NextRequest) {
           ]);
           continue;
         }
-        // กันผิดบัญชี: ถ้า session มี queue_code หรือ reservation_id ให้ตรวจเจ้าของก่อนผูก
+        // ถ้า session มี queue_code หรือ reservation_id ให้ตรวจเจ้าของก่อนผูก
         const sessQueue = (sess as any).queue_code as string | undefined | null;
         if (sessQueue) {
           const { data: resv } = await supabase
@@ -205,7 +205,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // ถ้าเคยผูกกับบัญชีนี้อยู่แล้ว ไม่ต้อง upsert ซ้ำ (อัปเดตเวลาผูกล่าสุดได้ตามต้องการ)
+        // ถ้าเคยผูกกับบัญชีนี้อยู่แล้ว ไม่ต้อง upsert ซ้ำ 
         if (!existingLink) {
           await supabase.from("line_links").insert({
             line_user_id: lineUserId,

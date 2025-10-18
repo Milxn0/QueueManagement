@@ -52,7 +52,7 @@ export async function POST(req: Request) {
 
     const supabase = createServiceClient();
 
-    // upsert bills (หนึ่งบิลต่อ reservation)
+    // upsert bills หนึ่งบิลต่อ reservation
     const { data: bill, error: billErr } = await supabase
       .from("bills")
       .upsert(
@@ -64,7 +64,7 @@ export async function POST(req: Request) {
 
     if (billErr) return NextResponse.json({ error: billErr.message }, { status: 500 });
 
-    // ล้างรายการเก่าก่อน
+    // ล้างรายการเก่า
     const { error: delErr } = await supabase.from("bill_items").delete().eq("bill_id", bill.id);
     if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     const { error: resErr } = await supabase.from("reservations").update({ status: "paid" }).eq("id", reservationId);
     if (resErr) return NextResponse.json({ error: resErr.message }, { status: 500 });
 
-    // สำคัญ: "ปล่อยโต๊ะ" โดยตั้ง released_at (เก็บประวัติ ไม่ลบ)
+    // ปล่อยโต๊ะ โดยตั้ง released_at 
     const { error: releaseErr } = await supabase
       .from("reservation_tables")
       .update({ released_at: new Date().toISOString() })
@@ -127,7 +127,6 @@ export async function POST(req: Request) {
       .is("released_at", null);
 
     if (releaseErr) {
-      // ไม่ทำให้ fail การชำระ แต่บันทึก log
       console.error("[pay] release reservation_tables failed:", releaseErr.message);
     }
 

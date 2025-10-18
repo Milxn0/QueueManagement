@@ -80,13 +80,13 @@ export async function POST(req: NextRequest) {
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
-  // มาร์กลิงก์ใช้แล้ว และออก OTP (purpose='otp')
+  // มาร์กลิงก์ใช้แล้ว และออก OTP
   await svc
     .from("line_link_sessions")
     .update({ used_at: new Date().toISOString() })
     .eq("id", t.id);
 
-  // อก OTP โดยไม่ต้องมี reservation_id ก็ได้
+  // ออก OTP โดยไม่ต้องมี reservation_id ก็ได้
   await svc.from("line_link_sessions").insert({
     purpose: "otp",
     line_user_id: t.line_user_id,

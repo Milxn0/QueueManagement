@@ -75,7 +75,7 @@ export default function ManageQueuesPage() {
   const [search, setSearch] = useState("");
   const norm = (v: unknown) => (v == null ? "" : String(v)).toLowerCase();
 
-  // --- normalize user field from either `users` or `user`
+  // --- normalize user ---
   const pickUser = (r: any) => r?.users ?? r?.user ?? null;
   const normalizeRowsUser = <T extends Record<string, any>>(arr: T[]) =>
     (Array.isArray(arr) ? arr : []).map((r) =>
@@ -111,7 +111,7 @@ export default function ManageQueuesPage() {
       end = endOfYearISO;
     }
 
-    // helper: แปลง response เป็นอาร์เรย์เสมอ
+    // แปลง response เป็นอาร์เรย์
     const normalize = (json: any) =>
       (Array.isArray(json) && json) ||
       (Array.isArray(json?.data) && json.data) ||
@@ -121,7 +121,7 @@ export default function ManageQueuesPage() {
       (Array.isArray(json?.reservations) && json.reservations) ||
       [];
 
-    // helper: call API ตามพารามิเตอร์
+    // Call API ตามพารามิเตอร์
     const call = async (params: Record<string, string | undefined>) => {
       const qs = new URLSearchParams();
       if (start) qs.set("start", start);
@@ -139,15 +139,15 @@ export default function ManageQueuesPage() {
       return normalize(json) as ReservationRow[];
     };
 
-    // ฟังก์ชันตรวจว่าเป็น “มีแต่ waiting” หรือไม่
+    // ฟังก์ชันตรวจว่า มีแต่ waiting ไหม
     const allWaiting = (arr: ReservationRow[]) =>
       arr.length > 0 &&
       arr.every((r) => String(r?.status ?? "").toLowerCase() === "waiting");
 
-    // Fallback: ดึงตรงจาก Supabase ให้ “ทุกสถานะ” และ include ความสัมพันธ์ที่ UI ใช้
+    // Fallback: ดึงตรงจาก Supabase 
     const supaAll = async (): Promise<ReservationRow[]> => {
       try {
-        // 1) พยายาม select พร้อมความสัมพันธ์ก่อน
+        // 1) พยายาม select
         let q = supabase
           .from("reservations")
           .select(
@@ -181,7 +181,7 @@ export default function ManageQueuesPage() {
           (error as any)?.message || error
         );
 
-        // 2) Fallback: ดึงเฉพาะคอลัมน์ฐานก่อน
+        // 2) ดึงเฉพาะคอลัมน์ฐานก่อน
         let q2 = supabase
           .from("reservations")
           .select(
@@ -213,7 +213,7 @@ export default function ManageQueuesPage() {
 
         const baseRows = Array.isArray(base) ? base : [];
 
-        // 3) เติมชื่อผู้จอง: ดึง users แบบ batch แล้ว map กลับเข้าไปเป็นฟิลด์ nested `users`
+        // 3) ดึง users แบบ batch แล้ว map กลับเข้าไปเป็นฟิลด์
         const userIds = Array.from(
           new Set(
             baseRows
@@ -253,7 +253,7 @@ export default function ManageQueuesPage() {
 
         const merged: ReservationRow[] = baseRows.map((r: any) => ({
           ...r,
-          users: usersMap.get(r.user_id ?? "") ?? null, // ให้ UI ใช้ r.users?.name ได้เหมือนเดิม
+          users: usersMap.get(r.user_id ?? "") ?? null,
         }));
 
         return merged;
@@ -264,7 +264,7 @@ export default function ManageQueuesPage() {
     };
 
     try {
-      // 1) พยายามขอ “ทุกสถานะ” จาก API ในครั้งเดียวก่อน
+      // 1) พยายามขอทุกสถานะ จาก API ในครั้งเดียว
       const list1 = await call({
         statuses: "waiting,confirmed,seated,paid,cancelled",
         include_cancelled: "1",
@@ -276,7 +276,7 @@ export default function ManageQueuesPage() {
         return;
       }
 
-      // 2) แผนสำรองรอบแรก: รวมผลหลายคำขอทีละสถานะ (กรณี API รองรับ status แยก)
+      // 2) แผนสำรองรวมผลหลายคำขอทีละสถานะ
       const statuses = ["waiting", "confirmed", "seated", "paid", "cancelled"];
       const lists = await Promise.all(statuses.map((s) => call({ status: s })));
 
@@ -293,11 +293,12 @@ export default function ManageQueuesPage() {
         return;
       }
 
-      // 3) แผนสำรองสุดท้าย: ดึงตรงจาก Supabase (ได้ทุกสถานะจริง ๆ)
+      // 3) แผนสุดท้ายดึงตรงจาก Supabase
       const supa = await supaAll();
       setRows(dropDeleted(normalizeRowsUser(supa)).slice(0, 200));
     } catch (err) {
       console.error("fetchReservations error:", err);
+
       // 4) ถ้า API พัง ให้ fallback Supabase ทันที
       const supa = await supaAll();
       setRows(dropDeleted(normalizeRowsUser(supa)).slice(0, 200));
@@ -310,7 +311,7 @@ export default function ManageQueuesPage() {
     const base = Array.isArray(rows) ? rows : [];
     const term = norm(search);
 
-    // กรองตามแท็บ:ให้เหลือเฉพาะ cancelled
+    // กรองให้เหลือเฉพาะ cancelled
     const filteredByTab =
       filter === "cancelled"
         ? base.filter(

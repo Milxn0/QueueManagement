@@ -97,7 +97,7 @@ export default function UserDetailModal({
 
   if (!open || !user) return null;
 
-  const canEditRole = !isSelf; // กันเปลี่ยน role ตัวเอง
+  const canEditRole = !isSelf; 
   const displayName = (form.name as string) || user.name || user.email || "—";
 
   const copyUid = async () => {
@@ -139,7 +139,7 @@ export default function UserDetailModal({
       //โดยเคลียร์เบอร์ให้ว่างถ้าเบอร์ซ้ำ
       const retryClearPhone = async () => {
         const payload2 = { ...payload, phone: null };
-        // อัพเดตฟอร์มให้ UI เห็นด้วย
+        // อัพเดตฟอร์มให้ UI เห็น
         setForm((f) => ({ ...f, phone: "" }));
 
         if (isSelf) {

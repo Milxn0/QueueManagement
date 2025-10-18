@@ -28,7 +28,7 @@ export default function ExportControlsBar(props: Props) {
     setYearVal,
     exporting,
     onExport,
-    onExportExcel, //ฟังก์ชันใหม่ (optional)
+    onExportExcel, 
   } = props;
 
   return (

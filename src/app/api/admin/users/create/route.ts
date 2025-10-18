@@ -24,7 +24,7 @@ export async function POST(req: Request) {
         { status: 400 }
       );
 
-    // 1) ตรวจสิทธิ์ผู้เรียก (ต้องเป็น admin)
+    // 1) ตรวจสิทธิ์ผู้เรียก ต้องเป็น admin)
     const cookieStore = await cookies();
     const supabaseAuth = createServerClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -52,7 +52,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // 2) สร้างผู้ใช้ใน Auth (Service Role)
+    // 2) สร้างผู้ใช้ใน Auth 
     const admin = createServiceClient();
     const { data: created, error: createErr } =
       await admin.auth.admin.createUser({

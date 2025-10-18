@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // 3) สร้างช่วงเวลา (UTC) รอบเป้า: now + 15 นาที ± jitter
+  // 3) สร้างช่วงเวลา (UTC) รอบเป้า: now + 15 นาที 
   const now = new Date();
   const center = new Date(now.getTime() + TARGET_MIN_BEFORE * 60 * 1000);
   const start = new Date(center.getTime() - JITTER_SECONDS * 1000);
@@ -58,7 +58,7 @@ export async function GET(req: NextRequest) {
         },
       ]);
 
-      // 6) mark ว่าส่งแล้ว — ถ้า column ไม่มี ให้ log ออกมาอย่างชัดเจน
+      // 6) mark ว่าส่งแล้ว
       const { error: upErr } = await svc
         .from("reservations")
         .update({ reminded_15m_at: new Date().toISOString() })

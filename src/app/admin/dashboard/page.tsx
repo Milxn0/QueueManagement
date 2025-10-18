@@ -103,7 +103,7 @@ export default function TodayQueuePage() {
         waitingAll = null;
       }
 
-      // fallback ถ้า API ใช้ไม่ได้จริง ๆ (อาจติด RLS)
+      // fallback ถ้า API ใช้ไม่ได้จริง ๆ 
       if (!waitingAll) {
         const { data: wRows, error: wErr } = await supabase
           .from("reservations")

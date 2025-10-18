@@ -51,7 +51,7 @@ function statusLabel(s: string | null) {
   return v || "ไม่ทราบสถานะ";
 }
 
-// ---------- REPLACE: notify ให้ log จำนวน recipients + result ----------
+// ----------  notify ให้ log จำนวน recipients + result ----------
 export async function notifyReservationStatusChange(reservationId: string) {
   const { data: r, error: rErr } = await svc
     .from("reservations")
@@ -130,7 +130,7 @@ export async function notifyReservationStatusChange(reservationId: string) {
   }
 }
 
-// ---------- OPTIONAL: ใช้ที่อื่นได้ ----------
+
 export async function pushLineByUserId(userId: string, messages: any[]) {
   const { data: links, error } = await svc
     .from("line_links")

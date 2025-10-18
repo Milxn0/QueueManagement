@@ -31,10 +31,10 @@ export function makeRangeISO(
   monthStr: string,
   yearStr: string
 ) {
-  //โหมดทั้งหมด (Export ข้อมูลทั้งตาราง)
+  //Export ข้อมูลทั้งตาราง
   if (mode === "all") {
-    const start = new Date(1900, 0, 1, 0, 0, 0, 0); // 1900-01-01 00:00
-    const end = new Date(2100, 11, 31, 23, 59, 59, 999); // 2100-12-31 23:59
+    const start = new Date(1900, 0, 1, 0, 0, 0, 0); 
+    const end = new Date(2100, 11, 31, 23, 59, 59, 999);
     return {
       start: start.toISOString(),
       end: end.toISOString(),

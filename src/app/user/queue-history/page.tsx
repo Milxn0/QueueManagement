@@ -66,8 +66,6 @@ export default function UserReservationHistoryPage() {
   // detail modal
   const [detailRow, setDetailRow] = useState<DetailRow | null>(null);
 
-  // refetch with join table for table_name
-  // GET อ่านข้อมูลการจองของ user คนที่ login อยู่
   async function refetch() {
     if (!me?.id) return;
     const { data, error: qErr } = await supabase

@@ -28,7 +28,6 @@ export default function LineLinkPage() {
     )}&sig=${encodeURIComponent(sig)}`;
   }, [token, sig]);
 
-  // countdown
   const [now, setNow] = useState<number>(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 1000);
@@ -47,7 +46,7 @@ export default function LineLinkPage() {
 
   useEffect(() => {
     (async () => {
-      // ไม่มี token/sig ให้แสดงวิธีเริ่มต้นแทน error
+      // ไม่มี token ให้แสดงวิธีเริ่มต้นแทน error
       if (!token || !sig) {
         setLoading(false);
         setErr(null);
@@ -79,7 +78,6 @@ export default function LineLinkPage() {
           return;
         }
         setOtp(body.code || null);
-        // หมดอายุฝั่งหน้าเว็บ 5 นาที
         setExpiresAt(new Date(Date.now() + 5 * 60 * 1000).toISOString());
       } catch {
         setErr("เกิดข้อผิดพลาด กรุณาลองใหม่");
@@ -113,7 +111,7 @@ export default function LineLinkPage() {
         </div>
 
         <div className="p-5 space-y-4">
-          {/* กรณีไม่มี token/sig: แสดงวิธีเริ่ม */}
+          {/* กรณีไม่มี token แสดงวิธีเริ่ม */}
           {!token || !sig ? (
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-800">
               <p className="font-medium">วิธีเริ่มการเชื่อมต่อ</p>
